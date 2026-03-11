@@ -1,0 +1,22 @@
+{
+  "name": "@tokengate/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.21.0",
+    "@tokengate/crypto": "workspace:*",
+    "@tokengate/env-format": "workspace:*",
+    "@tokengate/sdk": "workspace:*",
+    "convex": "^1.18.2",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}
+

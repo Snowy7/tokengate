@@ -1,0 +1,22 @@
+import type { ReactNode } from "react";
+import { ClerkProvider } from "@clerk/nextjs";
+import { Providers } from "@/components/providers";
+import "./globals.css";
+
+export const metadata = {
+  title: "Tokengate.dev",
+  description: "Zero-knowledge environment secret sync for teams."
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <Providers>{children}</Providers>
+        </body>
+      </html>
+    </ClerkProvider>
+  );
+}
+
