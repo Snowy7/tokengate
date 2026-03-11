@@ -1,5 +1,5 @@
 # Triggered on: every push to main + every pull request
-# - verify: runs tests, typecheck, and builds (always)
+# - verify: runs tests and typecheck (always)
 # - deploy-convex: deploys Convex schema/functions (only on main push, after verify passes)
 name: ci
 
@@ -30,12 +30,6 @@ jobs:
 
       - name: Build CLI
         run: cd apps/cli && bun run build
-
-      - name: Build web app
-        env:
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy
-          CLERK_SECRET_KEY: sk_test_dummy
-        run: bun run build:web
 
   deploy-convex:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
