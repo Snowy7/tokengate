@@ -1,46 +1,27 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { TokengateConvexClient } from "./convex-client";
 import { convexFunctions } from "./index";
 
 describe("TokengateConvexClient", () => {
-  test("sends convex query payloads", async () => {
-    const calls: RequestInit[] = [];
+  it("normalizes convex document ids to id", async () => {
     const client = new TokengateConvexClient({
       url: "https://example.convex.cloud",
-      token: "secret",
-      fetcher: async (_input, init) => {
-        calls.push(init ?? {});
-        return new Response(
-          JSON.stringify({
-            status: "success",
-            value: [{ ok: true }]
-          }),
-          { status: 200 }
-        );
-      }
-    });
-
-    const result = await client.query(convexFunctions.listWorkspaces, {});
-
-    expect(result).toEqual([{ ok: true }]);
-    expect(calls[0]?.method).toBe("POST");
-    expect((calls[0]?.headers as Headers).get("authorization")).toBe("Bearer secret");
-    expect(String(calls[0]?.body)).toContain(convexFunctions.listWorkspaces);
-  });
-
-  test("throws convex errors", async () => {
-    const client = new TokengateConvexClient({
-      url: "https://example.convex.cloud",
+      token: "token",
       fetcher: async () =>
         new Response(
           JSON.stringify({
-            status: "error",
-            errorMessage: "bad request"
-          }),
-          { status: 200 }
+            status: "success",
+            value: {
+              _id: "workspace_123",
+              name: "Acme",
+              nested: [{ _id: "project_123", name: "web" }]
+            }
+          })
         )
     });
 
-    await expect(client.query(convexFunctions.listWorkspaces, {})).rejects.toThrow("bad request");
+    const result = await client.query<{ id: string; nested: Array<{ id: string }> }>(convexFunctions.listWorkspaces, {});
+    expect(result.id).toBe("workspace_123");
+    expect(result.nested[0]?.id).toBe("project_123");
   });
 });

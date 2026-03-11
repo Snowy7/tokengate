@@ -136,6 +136,10 @@ export function getConfigPath() {
   return process.env.TOKENGATE_CONFIG_PATH ?? join(homedir(), ".config", "tokengate", "config.json");
 }
 
+export function getRecoveryDirPath() {
+  return join(dirname(getConfigPath()), "recovery");
+}
+
 function hasSensitiveState(value: SensitiveCliState) {
   return Boolean(value.deviceId || value.accessToken || value.privateKey || value.publicKey);
 }

@@ -62,7 +62,7 @@ export class TokengateConvexClient {
       throw new Error(payload.errorMessage);
     }
 
-    return payload.value;
+    return normalizeConvexValue(payload.value) as T;
   }
 
   private headers() {
@@ -78,3 +78,23 @@ export class TokengateConvexClient {
   }
 }
 
+function normalizeConvexValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeConvexValue(item)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const normalized = Object.fromEntries(
+      Object.entries(record).map(([key, entryValue]) => [key, normalizeConvexValue(entryValue)])
+    );
+
+    if ("_id" in record && !("id" in record)) {
+      normalized.id = record._id;
+    }
+
+    return normalized as T;
+  }
+
+  return value;
+}

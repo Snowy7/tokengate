@@ -30,7 +30,7 @@ import {
   type Workspace,
   type WorkspaceWithMembership
 } from "@tokengate/sdk";
-import { getConfigPath, loadConfig, saveConfig } from "./config";
+import { getConfigPath, getRecoveryDirPath, loadConfig, saveConfig } from "./config";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -357,15 +357,19 @@ async function runInitWizard() {
     let selectedWorkspaceId = workspaceSelection.workspace.id;
     let nextWorkspaceKeys = workspaceSelection.workspaceKeys;
 
-    const projects = await client.query<Project[]>(convexFunctions.listProjects, {
-      workspaceId: selectedWorkspaceId
-    });
-    const project = await chooseProject(prompt, client, selectedWorkspaceId, projects);
+    const projects = workspaceSelection.createdNew
+      ? []
+      : await client.query<Project[]>(convexFunctions.listProjects, {
+          workspaceId: selectedWorkspaceId
+        });
+    const project = await chooseProject(prompt, client, selectedWorkspaceId, projects, workspaceSelection.createdNew);
 
-    const environments = await client.query<Environment[]>(convexFunctions.listEnvironments, {
-      projectId: project.id
-    });
-    const environment = await chooseEnvironment(prompt, client, project.id, environments);
+    const environments = workspaceSelection.createdNew
+      ? []
+      : await client.query<Environment[]>(convexFunctions.listEnvironments, {
+          projectId: project.id
+        });
+    const environment = await chooseEnvironment(prompt, client, project.id, environments, workspaceSelection.createdNew);
 
     const secretSet = await client.query<SecretSet | null>(convexFunctions.getSecretSetForEnvironment, {
       environmentId: environment.id
@@ -437,8 +441,9 @@ async function chooseWorkspace(
     const nextWorkspaceKeys = { ...workspaceKeys, [workspaceId]: bootstrap.workspaceKey };
     await saveWorkspaceContext(config, nextWorkspaceKeys, { workspaceId });
     printSuccess(`Created workspace ${formatCode(name)}.`);
-    printWarning("Save this recovery phrase offline before continuing:");
-    console.log(bootstrap.recoveryPhrase);
+    const recoveryPath = await saveRecoveryPhrase(workspaceId, name, bootstrap.recoveryPhrase);
+    printSuccess(`Recovery phrase saved to ${recoveryPath}`);
+    printWarning("Keep that recovery file somewhere safe.");
 
     return {
       workspace: {
@@ -449,7 +454,8 @@ async function chooseWorkspace(
         createdAt: Date.now(),
         createdBy: "me"
       } satisfies Workspace,
-      workspaceKeys: nextWorkspaceKeys
+      workspaceKeys: nextWorkspaceKeys,
+      createdNew: true
     };
   }
 
@@ -468,7 +474,8 @@ async function chooseWorkspace(
 
   return {
     workspace: selected,
-    workspaceKeys: nextWorkspaceKeys
+    workspaceKeys: nextWorkspaceKeys,
+    createdNew: false
   };
 }
 
@@ -476,22 +483,23 @@ async function chooseProject(
   prompt: ReturnType<typeof createPrompt>,
   client: TokengateConvexClient,
   workspaceId: string,
-  projects: Project[]
+  projects: Project[],
+  forceCreate: boolean
 ) {
-  if (projects.length === 0) {
+  if (forceCreate || projects.length === 0) {
     printMuted("No projects found in this workspace yet.");
-  }
+  } else {
+    const options: Array<{ label: string; value: Project | null }> = projects.map((project) => ({
+      label: project.name,
+      value: project
+    }));
+    options.push({ label: "Create new project", value: null });
+    const choice = await prompt.select("Choose a project", options.map((item) => item.label));
+    const selected = options[choice]?.value;
 
-  const options: Array<{ label: string; value: Project | null }> = projects.map((project) => ({
-    label: project.name,
-    value: project
-  }));
-  options.push({ label: "Create new project", value: null });
-  const choice = await prompt.select("Choose a project", options.map((item) => item.label));
-  const selected = options[choice]?.value;
-
-  if (selected) {
-    return selected;
+    if (selected) {
+      return selected;
+    }
   }
 
   const name = await prompt.input("Project name", "web");
@@ -514,22 +522,23 @@ async function chooseEnvironment(
   prompt: ReturnType<typeof createPrompt>,
   client: TokengateConvexClient,
   projectId: string,
-  environments: Environment[]
+  environments: Environment[],
+  forceCreate: boolean
 ) {
-  if (environments.length === 0) {
+  if (forceCreate || environments.length === 0) {
     printMuted("No environments found in this project yet.");
-  }
+  } else {
+    const options: Array<{ label: string; value: Environment | null }> = environments.map((environment) => ({
+      label: environment.name,
+      value: environment
+    }));
+    options.push({ label: "Create new environment", value: null });
+    const choice = await prompt.select("Choose an environment", options.map((item) => item.label));
+    const selected = options[choice]?.value;
 
-  const options: Array<{ label: string; value: Environment | null }> = environments.map((environment) => ({
-    label: environment.name,
-    value: environment
-  }));
-  options.push({ label: "Create new environment", value: null });
-  const choice = await prompt.select("Choose an environment", options.map((item) => item.label));
-  const selected = options[choice]?.value;
-
-  if (selected) {
-    return selected;
+    if (selected) {
+      return selected;
+    }
   }
 
   const name = await prompt.input("Environment name", "development");
@@ -571,6 +580,18 @@ async function saveWorkspaceContext(
     lastEnvironmentId: target.environmentId ?? config.lastEnvironmentId,
     lastSecretSetId: target.secretSetId ?? config.lastSecretSetId
   });
+}
+
+async function saveRecoveryPhrase(workspaceId: string, workspaceName: string, recoveryPhrase: string) {
+  const dirPath = getRecoveryDirPath();
+  await mkdir(dirPath, { recursive: true });
+  const filename = `${toSlug(workspaceName)}-${workspaceId}.txt`;
+  const filePath = resolve(dirPath, filename);
+  await writeFile(
+    filePath,
+    `Tokengate recovery phrase\nworkspace=${workspaceName}\nworkspace_id=${workspaceId}\nrecovery_phrase=${recoveryPhrase}\n`
+  );
+  return filePath;
 }
 
 function printHelp() {
@@ -654,24 +675,89 @@ function createPrompt() {
       return answer === "y" || answer === "yes";
     },
     async select(label: string, options: string[]) {
-      console.log(label);
-      options.forEach((option, index) => {
-        console.log(`  ${index + 1}. ${option}`);
-      });
-
-      while (true) {
-        const raw = (await rl.question("Choose a number: ")).trim();
-        const parsed = Number(raw);
-        if (Number.isInteger(parsed) && parsed >= 1 && parsed <= options.length) {
-          return parsed - 1;
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        console.log(label);
+        options.forEach((option, index) => {
+          console.log(`  ${index + 1}. ${option}`);
+        });
+        while (true) {
+          const raw = (await rl.question("Choose a number: ")).trim();
+          const parsed = Number(raw);
+          if (Number.isInteger(parsed) && parsed >= 1 && parsed <= options.length) {
+            return parsed - 1;
+          }
+          printWarning("Enter one of the listed numbers.");
         }
-        printWarning("Enter one of the listed numbers.");
       }
+
+      rl.pause();
+      return arrowSelect(label, options);
     },
     close() {
       rl.close();
     }
   };
+}
+
+async function arrowSelect(label: string, options: string[]) {
+  let selected = 0;
+
+  const render = () => {
+    output.write("\u001b[2J\u001b[H");
+    console.log(bold(label));
+    console.log(dim("Use ↑/↓ to move, Enter to confirm.\n"));
+    options.forEach((option, index) => {
+      const prefix = index === selected ? cyan("›") : " ";
+      const line = index === selected ? bold(option) : dim(option);
+      console.log(`${prefix} ${line}`);
+    });
+  };
+
+  render();
+
+  return await new Promise<number>((resolve) => {
+    const onData = (buffer: Buffer) => {
+      const key = buffer.toString("utf8");
+
+      if (key === "\u0003") {
+        cleanup();
+        throw new Error("Interrupted");
+      }
+
+      if (key === "\r" || key === "\n") {
+        const choice = selected;
+        cleanup();
+        console.log();
+        resolve(choice);
+        return;
+      }
+
+      if (key === "\u001b[A") {
+        selected = (selected - 1 + options.length) % options.length;
+        render();
+        return;
+      }
+
+      if (key === "\u001b[B") {
+        selected = (selected + 1) % options.length;
+        render();
+      }
+    };
+
+    const cleanup = () => {
+      if (input.isTTY) {
+        input.setRawMode(false);
+      }
+      input.off("data", onData);
+      input.pause();
+    };
+
+    if (input.isTTY) {
+      input.setRawMode(true);
+    }
+    input.resume();
+    input.on("data", onData);
+  });
 }
 
 async function openInBrowser(url: string) {
