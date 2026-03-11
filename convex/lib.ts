@@ -1,4 +1,5 @@
-import { ConvexError, type QueryCtx, type MutationCtx } from "convex/server";
+import { ConvexError } from "convex/values";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 export type Role = "owner" | "admin" | "member" | "viewer";
@@ -45,4 +46,3 @@ export async function createAuditEvent(
     createdAt: Date.now()
   });
 }
-

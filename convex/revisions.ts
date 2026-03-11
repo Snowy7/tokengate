@@ -1,5 +1,5 @@
-import { ConvexError, mutation, query, type MutationCtx, type QueryCtx } from "convex/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { createAuditEvent, requireWorkspaceRole } from "./lib";
 import type { Id } from "./_generated/dataModel";
 

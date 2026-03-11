@@ -1,5 +1,5 @@
-import { mutation, query } from "convex/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { createAuditEvent, requireAuth } from "./lib";
 
 export const listDevices = query({
@@ -61,4 +61,3 @@ export const revokeDevice = mutation({
     return { success: true };
   }
 });
-

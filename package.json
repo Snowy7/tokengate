@@ -9,7 +9,7 @@
   "scripts": {
     "dev:web": "bun --cwd apps/web dev",
     "dev:cli": "bun --cwd apps/cli dev",
-    "dev:convex": "bunx convex dev",
+    "dev:convex": "CI=1 bunx convex dev",
     "build:web": "bun --cwd apps/web build",
     "check:cli": "bunx tsc --noEmit -p apps/cli/tsconfig.json",
     "check:web": "bun --cwd apps/web build",
@@ -22,6 +22,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "convex": "^1.18.2",
     "typescript": "^5.9.3"
   }
 }
