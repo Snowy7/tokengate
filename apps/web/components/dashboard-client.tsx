@@ -175,6 +175,12 @@ export function DashboardClient() {
   const [latestRevision, setLatestRevision] = useState<SecretRevision | null>(null);
   const [history, setHistory] = useState<SecretRevision[]>([]);
 
+  // --- Loading states ---
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingEnvironments, setLoadingEnvironments] = useState(false);
+  const [loadingSecrets, setLoadingSecrets] = useState(false);
+
   // --- Per-environment crypto ---
   const [envPassword, setEnvPassword] = useState("");
   const [derivedKey, setDerivedKey] = useState<string | null>(null);
@@ -215,29 +221,36 @@ export function DashboardClient() {
 
   // --- Data loading ---
   const refreshWorkspaces = useCallback(async () => {
-    const payload = await fetchJson<{ workspaces: WorkspaceWithMembership[] }>("/api/workspaces");
-    setWorkspaces(payload.workspaces);
-    setSelectedWorkspaceId((cur) =>
-      payload.workspaces.some((w) => w.workspace?.id === cur) ? cur : payload.workspaces[0]?.workspace?.id ?? "",
-    );
+    setLoadingWorkspaces(true);
+    try {
+      const payload = await fetchJson<{ workspaces: WorkspaceWithMembership[] }>("/api/workspaces");
+      setWorkspaces(payload.workspaces);
+      setSelectedWorkspaceId((cur) =>
+        payload.workspaces.some((w) => w.workspace?.id === cur) ? cur : payload.workspaces[0]?.workspace?.id ?? "",
+      );
+    } finally {
+      setLoadingWorkspaces(false);
+    }
   }, []);
 
   useEffect(() => { void refreshWorkspaces(); }, [refreshWorkspaces]);
 
   useEffect(() => {
-    if (!selectedWorkspaceId) { setProjects([]); return; }
+    if (!selectedWorkspaceId) { setProjects([]); setLoadingProjects(false); return; }
+    setLoadingProjects(true);
     void fetchJson<{ projects: Project[] }>(`/api/projects?workspaceId=${selectedWorkspaceId}`).then((p) => {
       setProjects(p.projects);
       setSelectedProjectId((cur) => p.projects.some((x) => x.id === cur) ? cur : p.projects[0]?.id ?? "");
-    });
+    }).finally(() => setLoadingProjects(false));
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    if (!selectedProjectId) { setEnvironments([]); return; }
+    if (!selectedProjectId) { setEnvironments([]); setLoadingEnvironments(false); return; }
+    setLoadingEnvironments(true);
     void fetchJson<{ environments: Environment[] }>(`/api/environments?projectId=${selectedProjectId}`).then((p) => {
       setEnvironments(p.environments);
       setSelectedEnvironmentId((cur) => p.environments.some((x) => x.id === cur) ? cur : p.environments[0]?.id ?? "");
-    });
+    }).finally(() => setLoadingEnvironments(false));
   }, [selectedProjectId]);
 
   // When environment changes, reset crypto state and load metadata
@@ -259,17 +272,25 @@ export function DashboardClient() {
   }, [selectedEnvironmentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadSecretSetMeta(environmentId: string) {
-    const sp = await fetchJson<{ secretSet: SecretSet | null }>(`/api/secret-sets?environmentId=${environmentId}`);
-    setSecretSet(sp.secretSet);
-    if (!sp.secretSet?.id) {
-      setLatestRevision(null);
-      setHistory([]);
-      return;
+    setLoadingSecrets(true);
+    try {
+      const sp = await fetchJson<{ secretSet: SecretSet | null }>(`/api/secret-sets?environmentId=${environmentId}`);
+      setSecretSet(sp.secretSet);
+      if (!sp.secretSet?.id) {
+        setLatestRevision(null);
+        setHistory([]);
+        return;
+      }
+      // Fetch history and latest revision in parallel
+      const [hp, lp] = await Promise.all([
+        fetchJson<{ revisions: SecretRevision[] }>(`/api/revisions/history?secretSetId=${sp.secretSet.id}`),
+        fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${sp.secretSet.id}`),
+      ]);
+      setHistory(hp.revisions.slice().sort((a, b) => b.revision - a.revision));
+      setLatestRevision(lp.revision);
+    } finally {
+      setLoadingSecrets(false);
     }
-    const hp = await fetchJson<{ revisions: SecretRevision[] }>(`/api/revisions/history?secretSetId=${sp.secretSet.id}`);
-    setHistory(hp.revisions.slice().sort((a, b) => b.revision - a.revision));
-    const lp = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${sp.secretSet.id}`);
-    setLatestRevision(lp.revision);
   }
 
   // --- Unlock environment with password ---
@@ -455,7 +476,12 @@ export function DashboardClient() {
         {/* Workspaces */}
         <div className="sidebar-section">
           <span className="sidebar-section-label">Workspaces</span>
-          {workspaces.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No workspaces yet</span>}
+          {loadingWorkspaces && (
+            <>
+              <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "60%" }} />
+            </>
+          )}
+          {!loadingWorkspaces && workspaces.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No workspaces yet</span>}
           {workspaces.map((w) => w.workspace ? (
             <button key={w.workspace.id} className={`sidebar-item${w.workspace.id === selectedWorkspaceId ? " active" : ""}`} onClick={() => setSelectedWorkspaceId(w.workspace!.id)}>
               <IconBox size={14} /><span>{w.workspace.name}</span>
@@ -468,7 +494,12 @@ export function DashboardClient() {
         {selectedWorkspaceId && (
           <div className="sidebar-section">
             <span className="sidebar-section-label">Projects</span>
-            {projects.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No projects</span>}
+            {loadingProjects && (
+              <>
+                <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "55%" }} />
+              </>
+            )}
+            {!loadingProjects && projects.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No projects</span>}
             {projects.map((p) => (
               <button key={p.id} className={`sidebar-item${p.id === selectedProjectId ? " active" : ""}`} onClick={() => setSelectedProjectId(p.id)}>
                 <IconFolder size={14} /><span>{p.name}</span>
@@ -481,7 +512,12 @@ export function DashboardClient() {
         {selectedProjectId && (
           <div className="sidebar-section">
             <span className="sidebar-section-label">Environments</span>
-            {environments.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No environments</span>}
+            {loadingEnvironments && (
+              <>
+                <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "50%" }} />
+              </>
+            )}
+            {!loadingEnvironments && environments.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No environments</span>}
             {environments.map((e) => (
               <button key={e.id} className={`sidebar-item${e.id === selectedEnvironmentId ? " active" : ""}`} onClick={() => setSelectedEnvironmentId(e.id)}>
                 <IconLayers size={14} /><span>{e.name}</span>
@@ -526,7 +562,8 @@ export function DashboardClient() {
                 {selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
               </>
             )}
-            {!selectedWorkspace && <span className="muted">Select a workspace to begin</span>}
+            {!selectedWorkspace && !loadingWorkspaces && <span className="muted">Select a workspace to begin</span>}
+            {loadingWorkspaces && <span className="muted">Loading...</span>}
           </nav>
           <div className="status-bar">
             {isEnvUnlocked && selectedEnvironment && (
@@ -541,8 +578,40 @@ export function DashboardClient() {
           </div>
         </div>
 
-        {/* No workspaces */}
-        {workspaces.length === 0 && !isPending && (
+        {/* Initial loading — workspaces haven't loaded yet */}
+        {loadingWorkspaces && (
+          <div className="empty-state fade-in">
+            <div className="loading-spinner" />
+            <p className="muted" style={{ marginTop: 16 }}>Loading your workspaces...</p>
+          </div>
+        )}
+
+        {/* Loading projects after workspace selected */}
+        {!loadingWorkspaces && selectedWorkspaceId && loadingProjects && !selectedProjectId && (
+          <div className="empty-state fade-in">
+            <div className="loading-spinner" />
+            <p className="muted" style={{ marginTop: 16 }}>Loading projects...</p>
+          </div>
+        )}
+
+        {/* Loading environments after project selected */}
+        {!loadingWorkspaces && !loadingProjects && selectedProjectId && loadingEnvironments && !selectedEnvironmentId && (
+          <div className="empty-state fade-in">
+            <div className="loading-spinner" />
+            <p className="muted" style={{ marginTop: 16 }}>Loading environments...</p>
+          </div>
+        )}
+
+        {/* Loading secret set metadata */}
+        {!loadingWorkspaces && selectedEnvironmentId && loadingSecrets && (
+          <div className="empty-state fade-in">
+            <div className="loading-spinner" />
+            <p className="muted" style={{ marginTop: 16 }}>Loading secrets...</p>
+          </div>
+        )}
+
+        {/* No workspaces — only show after loading completes */}
+        {!loadingWorkspaces && workspaces.length === 0 && (
           <div className="empty-state fade-in">
             <IconShield size={48} />
             <h2 style={{ margin: "16px 0 8px", fontSize: 22 }}>Welcome to Tokengate</h2>
@@ -556,7 +625,7 @@ export function DashboardClient() {
         )}
 
         {/* No environment selected */}
-        {workspaces.length > 0 && !selectedEnvironmentId && (
+        {!loadingWorkspaces && !loadingProjects && !loadingEnvironments && workspaces.length > 0 && !selectedEnvironmentId && (
           <div className="empty-state fade-in">
             <IconLayers size={40} />
             <h3 style={{ margin: "12px 0 4px" }}>No environment selected</h3>
@@ -565,7 +634,7 @@ export function DashboardClient() {
         )}
 
         {/* Environment selected but locked */}
-        {selectedEnvironmentId && secretSet && !isEnvUnlocked && (
+        {!loadingSecrets && selectedEnvironmentId && secretSet && !isEnvUnlocked && (
           <div className="lock-screen fade-in">
             <div className="lock-icon"><IconLock size={32} /></div>
             <h2 style={{ marginBottom: 8 }}>Enter environment password</h2>
@@ -601,8 +670,8 @@ export function DashboardClient() {
           </div>
         )}
 
-        {/* Environment selected, no secret set (edge case) */}
-        {selectedEnvironmentId && !secretSet && (
+        {/* Environment selected, no secret set (edge case — only after loading) */}
+        {!loadingSecrets && selectedEnvironmentId && !secretSet && (
           <div className="empty-state fade-in">
             <IconShield size={40} />
             <h3 style={{ margin: "12px 0 4px" }}>No secret set</h3>
@@ -611,7 +680,7 @@ export function DashboardClient() {
         )}
 
         {/* UNLOCKED — Key-value editor */}
-        {selectedEnvironmentId && secretSet && isEnvUnlocked && (
+        {!loadingSecrets && selectedEnvironmentId && secretSet && isEnvUnlocked && (
           <div className="fade-in" style={{ padding: 24 }}>
             <div className="env-editor panel">
               <div className="env-editor-header">
