@@ -52,6 +52,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Deploy Convex
+        working-directory: packages/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: cd packages/convex && bunx convex deploy
+        run: npx convex deploy
