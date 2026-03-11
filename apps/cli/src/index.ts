@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { hostname } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
   decryptVaultPayload,
@@ -13,12 +14,24 @@ import {
 } from "@tokengate/crypto";
 import { normalizeEnvDocument } from "@tokengate/env-format";
 import { TokengateConvexClient } from "@tokengate/sdk/convex-client";
-import { convexFunctions, type CliConfig, type CreateRevisionResult, type DeviceLoginSession, type SecretRevision } from "@tokengate/sdk";
+import {
+  convexFunctions,
+  type CliConfig,
+  type CreateRevisionResult,
+  type DeviceLoginSession,
+  type SecretRevision,
+  type WorkspaceWithMembership
+} from "@tokengate/sdk";
 import { getConfigPath, loadConfig, saveConfig } from "./config";
 
 const [command, ...args] = process.argv.slice(2);
 
-await main(command, args);
+try {
+  await main(command, args);
+} catch (error) {
+  printError(error);
+  process.exitCode = 1;
+}
 
 async function main(commandName: string | undefined, commandArgs: string[]) {
   switch (commandName) {
@@ -43,17 +56,30 @@ async function main(commandName: string | undefined, commandArgs: string[]) {
 
 async function handleLogin(args: string[]) {
   const config = await loadConfig();
-  const label = args[0] ?? `${Bun.env.HOSTNAME ?? "device"}-${Date.now()}`;
+  const label = args[0] ?? `${hostname() || "device"}-${Date.now()}`;
   const deviceKeys = await generateDeviceKeyPair();
   const state = randomUUID();
   const callbackPort = 47233;
   const callbackUrl = `http://127.0.0.1:${callbackPort}/callback`;
+  const loginUrl = new URL("/cli/auth", config.appUrl);
+
+  loginUrl.searchParams.set("state", state);
+  loginUrl.searchParams.set("callback", callbackUrl);
+  loginUrl.searchParams.set("device_name", label);
+  loginUrl.searchParams.set("public_key", JSON.stringify(deviceKeys.publicKey));
 
   const session: DeviceLoginSession = {
     state,
     callbackUrl,
     deviceName: label
   };
+
+  let resolveLogin!: () => void;
+  let rejectLogin!: (error: Error) => void;
+  const loginResult = new Promise<void>((resolve, reject) => {
+    resolveLogin = resolve;
+    rejectLogin = reject;
+  });
 
   const server = Bun.serve({
     port: callbackPort,
@@ -74,10 +100,12 @@ async function handleLogin(args: string[]) {
 
       if (error) {
         server.stop();
-        return new Response(`CLI login failed: ${error}`, { status: 400 });
+        rejectLogin(new Error(error));
+        return new Response("Tokengate CLI login failed. You can return to the terminal.", { status: 400 });
       }
 
       if (!token || !deviceId) {
+        rejectLogin(new Error("Missing device token or device id"));
         return new Response("Missing device token or device id", { status: 400 });
       }
 
@@ -92,18 +120,25 @@ async function handleLogin(args: string[]) {
       });
 
       server.stop();
+      resolveLogin();
       return new Response("Tokengate CLI login complete. You can return to the terminal.");
     }
   });
 
-  const loginUrl = new URL("/cli/auth", config.appUrl);
-  loginUrl.searchParams.set("state", session.state);
-  loginUrl.searchParams.set("callback", session.callbackUrl);
-  loginUrl.searchParams.set("device_name", session.deviceName);
-  loginUrl.searchParams.set("public_key", JSON.stringify(deviceKeys.publicKey));
+  printBanner("Tokengate CLI");
+  printInfo(`Authorizing device ${formatCode(session.deviceName)}`);
+  printMuted("Opening your browser for confirmation...");
 
-  console.log(`Open this URL to authorize the device:\n${loginUrl.toString()}\n`);
-  console.log(`Waiting for callback on ${callbackUrl}`);
+  const opened = await openInBrowser(loginUrl.toString());
+  if (!opened) {
+    printWarning("Could not open a browser automatically.");
+    printMuted("Open this URL manually:");
+    console.log(loginUrl.toString());
+  }
+
+  printInfo("Waiting for confirmation...");
+  await loginResult;
+  printSuccess(`Signed in as ${formatCode(label)}.`);
 }
 
 async function handleInit(args: string[]) {
@@ -131,20 +166,38 @@ async function handleInit(args: string[]) {
     deviceLabel: config.deviceLabel
   });
 
-  console.log("Recovery phrase accepted.");
-  console.log(`Stored workspace key for ${workspaceId}. Fingerprint: ${workspaceKey.slice(0, 12)}...`);
+  printSuccess("Recovery phrase accepted.");
+  printInfo(`Stored workspace key for ${formatCode(workspaceId)}.`);
 }
 
 async function handleStatus() {
   const config = await loadConfig();
-  console.log(JSON.stringify({ configPath: getConfigPath(), config }, null, 2));
+  const hasWorkspaceKeys = Boolean(config.encryptedWorkspaceKeys);
+  printBanner("Tokengate CLI Status");
+  console.log(`Config: ${getConfigPath()}`);
+  console.log(`App URL: ${config.appUrl}`);
+  console.log(`Convex URL: ${config.convexUrl ?? "not configured"}`);
+  console.log(`Signed in: ${config.accessToken ? "yes" : "no"}`);
+  console.log(`Device: ${config.deviceLabel ?? "not registered"}`);
+  console.log(`Device ID: ${maskValue(config.deviceId)}`);
+  console.log(`Local auth: ${config.accessToken ? "encrypted at rest" : "not stored"}`);
+  console.log(`Workspace keys: ${hasWorkspaceKeys ? "present" : "not initialized"}`);
+  console.log(`Last workspace: ${config.lastWorkspaceId ?? "none"}`);
 }
 
 async function handleWorkspaces() {
   const config = await requireAuthenticatedConfig();
   const client = getConvexClient(config);
-  const workspaces = await client.query(convexFunctions.listWorkspaces, {});
-  console.log(JSON.stringify(workspaces, null, 2));
+  const workspaces = await client.query<WorkspaceWithMembership[]>(convexFunctions.listWorkspaces, {});
+  if (workspaces.length === 0) {
+    printMuted("No workspaces found.");
+    return;
+  }
+
+  printBanner("Workspaces");
+  for (const entry of workspaces) {
+    console.log(`${entry.workspace?.name ?? "Unknown"}  ${formatCode(entry.workspace?.id ?? "")}  role=${entry.membership.role}`);
+  }
 }
 
 async function handlePush(args: string[]) {
@@ -180,7 +233,12 @@ async function handlePush(args: string[]) {
     contentHash: payload.contentHash
   });
 
-  console.log(JSON.stringify(result, null, 2));
+  if (result.conflict) {
+    printWarning(`Push conflict. Latest remote revision: ${result.latestRevision ?? "unknown"}.`);
+    return;
+  }
+
+  printSuccess(`Pushed revision ${result.acceptedRevision ?? "unknown"} to ${formatCode(secretSetId)}.`);
 }
 
 async function handlePull(args: string[]) {
@@ -215,7 +273,7 @@ async function handlePull(args: string[]) {
   const plaintext = await decryptRevisionPayload(payload, workspaceKey);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, plaintext);
-  console.log(`Wrote ${outputPath}`);
+  printSuccess(`Wrote ${outputPath}`);
 }
 
 async function handleHistory(args: string[]) {
@@ -226,8 +284,18 @@ async function handleHistory(args: string[]) {
 
   const config = await requireAuthenticatedConfig();
   const client = getConvexClient(config);
-  const history = await client.query(convexFunctions.listRevisionHistory, { secretSetId });
-  console.log(JSON.stringify(history, null, 2));
+  const history = await client.query<SecretRevision[]>(convexFunctions.listRevisionHistory, { secretSetId });
+  if (history.length === 0) {
+    printMuted("No revisions found.");
+    return;
+  }
+
+  printBanner("Revision History");
+  for (const revision of history) {
+    console.log(
+      `r${revision.revision}  ${new Date(revision.createdAt).toISOString()}  by ${maskValue(revision.createdBy)}`
+    );
+  }
 }
 
 async function requireAuthenticatedConfig() {
@@ -260,16 +328,105 @@ async function readWorkspaceKeyVault(config: CliConfig, passphrase: string) {
 }
 
 function printHelp() {
-  console.log(`
-tokengate <command>
-
-Commands:
-  login [device-label]                 Start the browser device authorization flow
-  init <workspace-id> <recovery>       Store a workspace key derived from the recovery phrase
-  status                               Show local CLI config
+  printBanner("Tokengate CLI");
+  console.log(`Commands:
+  login [device-label]                 Sign in this machine in the browser
+  init <workspace-id> <recovery>       Store a workspace key from the recovery phrase
+  status                               Show safe local status
   workspaces                           List available workspaces
   push <file> <workspace-id> <set>     Encrypt and push a revision
   pull <set> <workspace-id> [output]   Pull the latest revision and write a .env file
-  history <set>                        Show remote revision history
-`);
+  history <set>                        Show remote revision history`);
+  console.log();
+  console.log("Set TOKENGATE_CLI_PASSPHRASE or TOKENGATE_VAULT_PASSPHRASE to protect local auth and workspace keys.");
+}
+
+function printBanner(title: string) {
+  console.log(`\n${bold(title)}\n`);
+}
+
+function printInfo(message: string) {
+  console.log(`${cyan("info")} ${message}`);
+}
+
+function printSuccess(message: string) {
+  console.log(`${green("ok")}   ${message}`);
+}
+
+function printWarning(message: string) {
+  console.log(`${yellow("warn")} ${message}`);
+}
+
+function printMuted(message: string) {
+  console.log(`${dim(message)}`);
+}
+
+function printError(error: unknown) {
+  const message = error instanceof Error ? error.message : "Unknown error";
+  console.error(`${red("error")} ${message}`);
+}
+
+function maskValue(value: string | undefined | null) {
+  if (!value) {
+    return "not set";
+  }
+  if (value.length <= 8) {
+    return "********";
+  }
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
+function formatCode(value: string) {
+  return `\`${value}\``;
+}
+
+async function openInBrowser(url: string) {
+  const commands =
+    process.platform === "darwin"
+      ? [["open", url]]
+      : process.platform === "win32"
+        ? [["cmd", "/c", "start", "", url]]
+        : [["xdg-open", url]];
+
+  for (const command of commands) {
+    const proc = Bun.spawn(command, {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore"
+    });
+    const exitCode = await proc.exited;
+    if (exitCode === 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function ansi(code: number, value: string) {
+  return process.stdout.isTTY ? `\u001b[${code}m${value}\u001b[0m` : value;
+}
+
+function bold(value: string) {
+  return ansi(1, value);
+}
+
+function dim(value: string) {
+  return ansi(2, value);
+}
+
+function red(value: string) {
+  return ansi(31, value);
+}
+
+function green(value: string) {
+  return ansi(32, value);
+}
+
+function yellow(value: string) {
+  return ansi(33, value);
+}
+
+function cyan(value: string) {
+  return ansi(36, value);
 }
