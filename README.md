@@ -22,6 +22,7 @@ Tokengate.dev is a hosted, zero-knowledge environment secret manager built as a 
 ```bash
 bun install
 bun test
+bun run check
 ```
 
 ## Production setup
