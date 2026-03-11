@@ -1,0 +1,13 @@
+{
+  "workspaceId": "k97aj9cxsk4796dvay7h9y54nn82pvfb",
+  "workspaceName": "Snowy",
+  "projectId": "jn79vy14r8dhevttbbx6n85vas82pgwe",
+  "projectName": "Web",
+  "mappings": {
+    ".env.local": {
+      "secretSetId": "jx79ta4b8hpw9n3v0ahy7bqnp182pkrh",
+      "environmentId": "jd783a8knhpd9zzs06jynrfhds82pkb9",
+      "environmentName": "development"
+    }
+  }
+}
