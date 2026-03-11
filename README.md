@@ -4,10 +4,10 @@ Tokengate.dev is a hosted, zero-knowledge environment secret manager built as a 
 
 - `apps/web`: Next.js frontend intended for deployment on Vercel
 - `apps/cli`: Bun-based CLI for local `.env` sync flows
+- `packages/convex`: Convex backend package
 - `packages/crypto`: shared browser/CLI cryptography primitives
 - `packages/env-format`: `.env` parsing and normalization helpers
 - `packages/sdk`: shared types and small client contracts
-- `convex`: Convex schema and mutations/queries
 
 ## Stack
 
@@ -44,7 +44,7 @@ bun run dev:web
 ### Run web + Convex together
 
 ```bash
-turbo run dev --parallel --filter=tokengate-dev --filter=@tokengate/web
+bun run dev
 ```
 
 ### Run the CLI locally
@@ -62,7 +62,7 @@ bun run dev:convex
 ## Environment loading
 
 The root [`.env.local`](/home/islam/projects/env-sync/.env.local) is the source of truth for local development.
-The web app, root Convex command, and CLI dev commands all load that same file explicitly.
+Each app/package uses a local `.env.local` symlink pointing back to the root file, so scripts can run normally without dotenv wrappers.
 
 ## Required environment variables
 

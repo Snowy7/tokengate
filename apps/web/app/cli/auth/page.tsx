@@ -18,12 +18,12 @@ export default function CliAuthPage() {
       return null;
     }
 
-    const approveUrl = new URL("http://tokengate.local/api/cli/device-flow/approve");
-    approveUrl.searchParams.set("callback", callbackUrl);
-    approveUrl.searchParams.set("state", state);
-    approveUrl.searchParams.set("device_name", deviceName ?? "tokengate-cli");
-    approveUrl.searchParams.set("public_key", params.get("public_key") ?? "");
-    return `${approveUrl.pathname}${approveUrl.search}`;
+    const search = new URLSearchParams();
+    search.set("callback", callbackUrl);
+    search.set("state", state);
+    search.set("device_name", deviceName ?? "tokengate-cli");
+    search.set("public_key", params.get("public_key") ?? "");
+    return `/api/cli/device-flow/approve?${search.toString()}`;
   }, [callbackUrl, deviceName, params, state]);
 
   return (

@@ -7,13 +7,12 @@
     "tokengate": "./src/index.ts"
   },
   "scripts": {
-    "dev": "dotenv -e ../../.env.local -- bun run src/index.ts",
+    "dev": "bun run src/index.ts",
     "check": "bunx tsc --noEmit"
   },
   "dependencies": {
     "@tokengate/crypto": "workspace:*",
     "@tokengate/env-format": "workspace:*",
-    "@tokengate/sdk": "workspace:*",
-    "dotenv-cli": "^8.0.0"
+    "@tokengate/sdk": "workspace:*"
   }
 }

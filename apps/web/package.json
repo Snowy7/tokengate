@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e ../../.env.local -- ./node_modules/.bin/next dev --hostname 127.0.0.1",
-    "build": "dotenv -e ../../.env.local -- ./node_modules/.bin/next build",
-    "check": "dotenv -e ../../.env.local -- ./node_modules/.bin/next build",
-    "start": "dotenv -e ../../.env.local -- ./node_modules/.bin/next start"
+    "dev": "./node_modules/.bin/next dev",
+    "build": "./node_modules/.bin/next build",
+    "check": "./node_modules/.bin/next build",
+    "start": "./node_modules/.bin/next start"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.21.0",
