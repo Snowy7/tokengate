@@ -106,7 +106,8 @@ export const createEnvironment = mutation({
   args: {
     projectId: v.id("projects"),
     name: v.string(),
-    slug: v.string()
+    slug: v.string(),
+    keySalt: v.string()
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -124,6 +125,7 @@ export const createEnvironment = mutation({
 
     await ctx.db.insert("secretSets", {
       environmentId,
+      keySalt: args.keySalt,
       createdAt: Date.now()
     });
 
@@ -150,6 +152,25 @@ export const listEnvironments = query({
 
     await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member", "viewer"]);
     return ctx.db.query("environments").withIndex("by_project", (query) => query.eq("projectId", args.projectId)).collect();
+  }
+});
+
+export const getSecretSetById = query({
+  args: {
+    secretSetId: v.id("secretSets")
+  },
+  handler: async (ctx, args) => {
+    const secretSet = await ctx.db.get(args.secretSetId);
+    if (!secretSet) return null;
+
+    const environment = await ctx.db.get(secretSet.environmentId);
+    if (!environment) return null;
+
+    const project = await ctx.db.get(environment.projectId);
+    if (!project) return null;
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member", "viewer"]);
+    return secretSet;
   }
 });
 

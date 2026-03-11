@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bunx convex dev --env-file .env.local",
-    "check": "bunx convex dev --once --env-file .env.local"
+    "dev": "bunx convex dev",
+    "check": "bunx convex dev --once"
   },
   "dependencies": {
     "convex": "^1.18.2"

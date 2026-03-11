@@ -26,9 +26,10 @@ export async function POST(request: NextRequest) {
       projectId?: string;
       name?: string;
       slug?: string;
+      keySalt?: string;
     };
 
-    if (!body.projectId || !body.name || !body.slug) {
+    if (!body.projectId || !body.name || !body.slug || !body.keySalt) {
       return jsonError(400, "Missing environment fields");
     }
 
@@ -36,7 +37,8 @@ export async function POST(request: NextRequest) {
     const environmentId = await client.mutation<string>(convexFunctions.createEnvironment, {
       projectId: body.projectId,
       name: body.name,
-      slug: body.slug
+      slug: body.slug,
+      keySalt: body.keySalt
     });
     return NextResponse.json({ environmentId });
   } catch (error) {

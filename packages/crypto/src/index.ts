@@ -31,6 +31,33 @@ export interface WorkspaceBootstrap {
   recoveryPhrase: string;
 }
 
+export function generateSalt(): string {
+  return base64UrlEncode(randomBytes(32));
+}
+
+export async function deriveEnvironmentKey(password: string, salt: string): Promise<string> {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    textEncoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: toBufferSource(base64UrlDecode(salt)),
+      iterations: 300_000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    256
+  );
+
+  return base64UrlEncode(new Uint8Array(derived));
+}
+
 export async function bootstrapWorkspace(): Promise<WorkspaceBootstrap> {
   const rawKey = randomBytes(32);
   const workspaceKey = base64UrlEncode(rawKey);

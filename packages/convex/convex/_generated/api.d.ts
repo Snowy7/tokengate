@@ -11,6 +11,7 @@
 import type * as devices from "../devices.js";
 import type * as lib from "../lib.js";
 import type * as revisions from "../revisions.js";
+import type * as wipe from "../wipe.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -23,6 +24,7 @@ declare const fullApi: ApiFromModules<{
   devices: typeof devices;
   lib: typeof lib;
   revisions: typeof revisions;
+  wipe: typeof wipe;
   workspaces: typeof workspaces;
 }>;
 

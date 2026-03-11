@@ -54,11 +54,18 @@ export class TokengateConvexClient {
     });
 
     if (!response.ok) {
-      throw new Error(await response.text());
+      const text = await response.text();
+      if (response.status === 401 || isAuthError(text)) {
+        throw new AuthError(text);
+      }
+      throw new Error(text);
     }
 
     const payload = (await response.json()) as ConvexResponse<T>;
     if (payload.status === "error") {
+      if (isAuthError(payload.errorMessage)) {
+        throw new AuthError(payload.errorMessage);
+      }
       throw new Error(payload.errorMessage);
     }
 
@@ -76,6 +83,23 @@ export class TokengateConvexClient {
 
     return headers;
   }
+}
+
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
+function isAuthError(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes("unauthenticated") ||
+    lower.includes("oidc token") ||
+    lower.includes("token") && lower.includes("expired") ||
+    lower.includes("could not verify")
+  );
 }
 
 function normalizeConvexValue<T>(value: T): T {

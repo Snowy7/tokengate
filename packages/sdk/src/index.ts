@@ -44,6 +44,7 @@ export interface Environment {
 export interface SecretSet {
   id: string;
   environmentId: string;
+  keySalt: string;
   latestRevision?: number;
   createdAt: number;
 }
@@ -112,6 +113,7 @@ export interface CreateEnvironmentInput {
   projectId: string;
   name: string;
   slug: string;
+  keySalt: string;
 }
 
 export interface CreateRevisionInput {
@@ -173,6 +175,7 @@ export const convexFunctions = {
   createEnvironment: "workspaces:createEnvironment",
   listEnvironments: "workspaces:listEnvironments",
   getSecretSetForEnvironment: "workspaces:getSecretSetForEnvironment",
+  getSecretSetForEnvironmentById: "workspaces:getSecretSetById",
   createRevision: "revisions:createRevision",
   getLatestRevision: "revisions:getLatestRevision",
   listRevisionHistory: "revisions:listRevisionHistory",
@@ -182,3 +185,5 @@ export const convexFunctions = {
 } as const;
 
 export type ConvexFunctionName = (typeof convexFunctions)[keyof typeof convexFunctions];
+
+export { AuthError } from "./convex-client";
