@@ -1545,7 +1545,7 @@ async function requireAuth() {
   }
   if (!config.convexUrl) {
     p.log.error(
-      `Missing Convex URL. Set ${pc.cyan("NEXT_PUBLIC_CONVEX_URL")} or re-run login.`
+      `Missing Convex URL. Run ${pc.cyan("tokengate init")} or re-run login.`
     );
     process.exit(1);
   }
@@ -1671,8 +1671,7 @@ function printHelp() {
     5. Config is saved to ${pc.cyan(LOCAL_CONFIG_FILE)}
 
   ${pc.bold("Environment variables")}
-    ${pc.dim("TOKENGATE_CLI_PASSPHRASE")}   Encrypt local auth at rest
-    ${pc.dim("NEXT_PUBLIC_CONVEX_URL")}     Convex deployment URL
+    ${pc.dim("TOKENGATE_APP_URL")}   Override app URL (default: https://tokengate.dev)
 `);
 
   p.outro(`${pc.dim("Docs:")} https://tokengate.dev/docs`);
