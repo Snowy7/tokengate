@@ -7,7 +7,17 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
+      "outputs": [".next/**", "dist/**"],
+      "env": [
+        "CLERK_SECRET_KEY",
+        "CLERK_JWT_ISSUER_DOMAIN",
+        "CONVEX_DEPLOYMENT",
+        "CONVEX_SITE_URL",
+        "CONVEX_DEPLOY_KEY",
+        "TOKENGATE_API_URL",
+        "TOKENGATE_APP_URL",
+        "TOKENGATE_VAULT_PASSPHRASE"
+      ]
     },
     "check": {
       "cache": false
