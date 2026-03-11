@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   bootstrapWorkspace,
+  decryptVaultPayload,
   decryptRevisionPayload,
+  encryptVaultPayload,
   encryptRevisionPayload,
   generateDeviceKeyPair,
   wrapWorkspaceKeyForDevice
@@ -40,10 +42,10 @@ export function DashboardClient() {
   const [envContent, setEnvContent] = useState("API_URL=https://api.tokengate.dev\nTOKEN=replace-me\n");
   const [recoveryPhrase, setRecoveryPhrase] = useState("");
   const [status, setStatus] = useState("Create your first workspace to start syncing revisions.");
+  const [vaultPassphrase, setVaultPassphrase] = useState("");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setWorkspaceKeys(readWorkspaceKeys());
     void refreshWorkspaces();
   }, []);
 
@@ -133,12 +135,16 @@ export function DashboardClient() {
     }
   }
 
-  function persistWorkspaceKey(workspaceId: string, workspaceKey: string) {
+  async function persistWorkspaceKey(workspaceId: string, workspaceKey: string) {
+    if (!vaultPassphrase) {
+      throw new Error("Set a local vault passphrase before saving workspace keys.");
+    }
+
     const next = {
-      ...readWorkspaceKeys(),
+      ...(await readWorkspaceKeys(vaultPassphrase)),
       [workspaceId]: workspaceKey
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(STORAGE_KEY, await encryptVaultPayload(JSON.stringify(next), vaultPassphrase));
     setWorkspaceKeys(next);
   }
 
@@ -154,11 +160,19 @@ export function DashboardClient() {
         ownerWrappedWorkspaceKey: wrapped
       });
 
-      persistWorkspaceKey(payload.workspaceId, bootstrap.workspaceKey);
+      await persistWorkspaceKey(payload.workspaceId, bootstrap.workspaceKey);
       setRecoveryPhrase(bootstrap.recoveryPhrase);
       setStatus("Workspace created. Recovery phrase generated locally and the key was saved in this browser.");
       await refreshWorkspaces();
       setSelectedWorkspaceId(payload.workspaceId);
+    });
+  }
+
+  function handleUnlockVault() {
+    startTransition(async () => {
+      const keys = await readWorkspaceKeys(vaultPassphrase);
+      setWorkspaceKeys(keys);
+      setStatus(`Unlocked ${Object.keys(keys).length} locally stored workspace key${Object.keys(keys).length === 1 ? "" : "s"}.`);
     });
   }
 
@@ -248,9 +262,28 @@ export function DashboardClient() {
           <input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} />
         </label>
 
-        <button className="button" onClick={handleCreateWorkspace} disabled={isPending || !workspaceName.trim()}>
+        <button
+          className="button"
+          onClick={handleCreateWorkspace}
+          disabled={isPending || !workspaceName.trim() || !vaultPassphrase}
+        >
           {isPending ? "Working..." : "Create workspace"}
         </button>
+
+        <div className="grid" style={{ gridTemplateColumns: "1fr auto", alignItems: "end" }}>
+          <label className="field">
+            <span>Local vault passphrase</span>
+            <input
+              type="password"
+              value={vaultPassphrase}
+              onChange={(event) => setVaultPassphrase(event.target.value)}
+              placeholder="Used to encrypt workspace keys in this browser"
+            />
+          </label>
+          <button className="button secondary" onClick={handleUnlockVault} disabled={!vaultPassphrase || isPending}>
+            Unlock vault
+          </button>
+        </div>
 
         {recoveryPhrase ? (
           <div>
@@ -277,7 +310,8 @@ export function DashboardClient() {
           <div className="panel" style={{ padding: 16, borderRadius: 18 }}>
             <p style={{ margin: 0, fontWeight: 700 }}>Workspace key missing on this browser</p>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Use the recovery phrase on a trusted machine and add the key back before decrypting revisions here.
+              Unlock the local vault with its passphrase or import the workspace again from a recovery phrase on a
+              trusted machine.
             </p>
           </div>
         ) : null}
@@ -377,7 +411,7 @@ export function DashboardClient() {
   );
 }
 
-function readWorkspaceKeys(): WorkspaceKeyMap {
+async function readWorkspaceKeys(passphrase: string): Promise<WorkspaceKeyMap> {
   if (typeof window === "undefined") {
     return {};
   }
@@ -388,7 +422,8 @@ function readWorkspaceKeys(): WorkspaceKeyMap {
   }
 
   try {
-    return JSON.parse(raw) as WorkspaceKeyMap;
+    const decrypted = await decryptVaultPayload(raw, passphrase);
+    return JSON.parse(decrypted) as WorkspaceKeyMap;
   } catch {
     return {};
   }

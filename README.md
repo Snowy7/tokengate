@@ -31,6 +31,7 @@ bun test
 3. Set `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_DEPLOYMENT` from your Convex deployment.
 4. Deploy `apps/web` to Vercel and point the project root to this monorepo.
 5. Run Convex separately with the same environment variables.
+6. Set `TOKENGATE_VAULT_PASSPHRASE` when using the CLI so workspace keys are encrypted locally.
 
 ### Run the web app
 

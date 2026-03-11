@@ -14,7 +14,7 @@ export async function loadConfig(): Promise<CliConfig> {
       appUrl: process.env.TOKENGATE_APP_URL ?? "http://localhost:3000",
       apiUrl: process.env.TOKENGATE_API_URL ?? process.env.TOKENGATE_APP_URL ?? "http://localhost:3000",
       convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
-      workspaceKeys: {}
+      encryptedWorkspaceKeys: undefined
     };
   }
 }

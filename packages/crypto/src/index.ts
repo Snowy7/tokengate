@@ -18,6 +18,14 @@ export interface DeviceKeyPair {
   privateKey: JsonWebKey;
 }
 
+export interface EncryptedVaultPayload {
+  algorithm: "AES-GCM-PBKDF2";
+  salt: string;
+  iv: string;
+  ciphertext: string;
+  iterations: number;
+}
+
 export interface WorkspaceBootstrap {
   workspaceKey: string;
   recoveryPhrase: string;
@@ -160,6 +168,50 @@ export function deserializeEncryptedPayload(payload: string): EncryptedPayload {
   return parsed;
 }
 
+export async function encryptVaultPayload(plaintext: string, passphrase: string): Promise<string> {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const iterations = 250_000;
+  const key = await derivePassphraseKey(passphrase, salt, iterations, ["encrypt"]);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: toBufferSource(iv) },
+    key,
+    textEncoder.encode(plaintext)
+  );
+
+  const payload: EncryptedVaultPayload = {
+    algorithm: "AES-GCM-PBKDF2",
+    salt: base64UrlEncode(salt),
+    iv: base64UrlEncode(iv),
+    ciphertext: base64UrlEncode(new Uint8Array(ciphertext)),
+    iterations
+  };
+
+  return JSON.stringify(payload);
+}
+
+export async function decryptVaultPayload(payload: string, passphrase: string): Promise<string> {
+  const parsed = JSON.parse(payload) as EncryptedVaultPayload;
+  if (parsed.algorithm !== "AES-GCM-PBKDF2") {
+    throw new Error("Unsupported vault payload");
+  }
+
+  const key = await derivePassphraseKey(
+    passphrase,
+    base64UrlDecode(parsed.salt),
+    parsed.iterations,
+    ["decrypt"]
+  );
+
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: toBufferSource(base64UrlDecode(parsed.iv)) },
+    key,
+    toBufferSource(base64UrlDecode(parsed.ciphertext))
+  );
+
+  return textDecoder.decode(plaintext);
+}
+
 function randomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
@@ -170,6 +222,30 @@ async function importAesGcmKey(rawKey: Uint8Array, usages: KeyUsage[]): Promise<
 
 async function importAesKwKey(rawKey: Uint8Array, usages: KeyUsage[]): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", toBufferSource(rawKey), { name: "AES-KW", length: 256 }, true, usages);
+}
+
+async function derivePassphraseKey(
+  passphrase: string,
+  salt: Uint8Array,
+  iterations: number,
+  usages: KeyUsage[]
+): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey("raw", textEncoder.encode(passphrase), "PBKDF2", false, [
+    "deriveKey"
+  ]);
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: toBufferSource(salt),
+      iterations,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    usages
+  );
 }
 
 function base64UrlEncode(value: Uint8Array): string {

@@ -149,7 +149,7 @@ export interface CliConfig {
   privateKey?: JsonWebKey;
   publicKey?: JsonWebKey;
   lastWorkspaceId?: string;
-  workspaceKeys?: Record<string, string>;
+  encryptedWorkspaceKeys?: string;
 }
 
 export interface WorkspaceWithMembership {

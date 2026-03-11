@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
+  decryptVaultPayload,
   decryptRevisionPayload,
+  encryptVaultPayload,
   encryptRevisionPayload,
   generateDeviceKeyPair,
   restoreWorkspaceKeyFromRecoveryPhrase
@@ -108,17 +110,17 @@ async function handleInit(args: string[]) {
   const config = await loadConfig();
   const workspaceId = args[0];
   const recoveryPhrase = args[1];
-  if (!workspaceId || !recoveryPhrase) {
-    throw new Error("Usage: tokengate init <workspace-id> <recovery-phrase>");
+  const passphrase = args[2] ?? process.env.TOKENGATE_VAULT_PASSPHRASE;
+  if (!workspaceId || !recoveryPhrase || !passphrase) {
+    throw new Error("Usage: tokengate init <workspace-id> <recovery-phrase> <vault-passphrase>");
   }
 
   const workspaceKey = restoreWorkspaceKeyFromRecoveryPhrase(recoveryPhrase);
+  const workspaceKeys = await readWorkspaceKeyVault(config, passphrase);
+  workspaceKeys[workspaceId] = workspaceKey;
   await saveConfig({
     ...config,
-    workspaceKeys: {
-      ...(config.workspaceKeys ?? {}),
-      [workspaceId]: workspaceKey
-    },
+    encryptedWorkspaceKeys: await encryptVaultPayload(JSON.stringify(workspaceKeys), passphrase),
     lastWorkspaceId: workspaceId,
     privateKey: config.privateKey,
     publicKey: config.publicKey,
@@ -155,7 +157,14 @@ async function handlePush(args: string[]) {
   }
 
   const config = await requireAuthenticatedConfig();
-  const workspaceKey = getWorkspaceKey(config, workspaceId);
+  const passphrase = process.env.TOKENGATE_VAULT_PASSPHRASE;
+  if (!passphrase) {
+    throw new Error("Set TOKENGATE_VAULT_PASSPHRASE before pushing secrets.");
+  }
+  const workspaceKey = (await readWorkspaceKeyVault(config, passphrase))[workspaceId];
+  if (!workspaceKey) {
+    throw new Error(`Missing workspace key for ${workspaceId}. Run \`tokengate init ${workspaceId} <recovery> <vault-passphrase>\`.`);
+  }
   const content = await readFile(filePath, "utf8");
   const normalized = normalizeEnvDocument(content);
   const payload = await encryptRevisionPayload(normalized, workspaceKey);
@@ -184,7 +193,14 @@ async function handlePull(args: string[]) {
   }
 
   const config = await requireAuthenticatedConfig();
-  const workspaceKey = getWorkspaceKey(config, workspaceId);
+  const passphrase = process.env.TOKENGATE_VAULT_PASSPHRASE;
+  if (!passphrase) {
+    throw new Error("Set TOKENGATE_VAULT_PASSPHRASE before pulling secrets.");
+  }
+  const workspaceKey = (await readWorkspaceKeyVault(config, passphrase))[workspaceId];
+  if (!workspaceKey) {
+    throw new Error(`Missing workspace key for ${workspaceId}. Run \`tokengate init ${workspaceId} <recovery> <vault-passphrase>\`.`);
+  }
   const client = getConvexClient(config);
   const payload = await client.query<{
     ciphertext: string;
@@ -227,19 +243,20 @@ async function requireAuthenticatedConfig() {
   return config;
 }
 
-function getWorkspaceKey(config: CliConfig, workspaceId: string) {
-  const workspaceKey = config.workspaceKeys?.[workspaceId];
-  if (!workspaceKey) {
-    throw new Error(`Missing workspace key for ${workspaceId}. Run \`tokengate init ${workspaceId} <recovery-phrase>\`.`);
-  }
-  return workspaceKey;
-}
-
 function getConvexClient(config: CliConfig) {
   return new TokengateConvexClient({
     url: config.convexUrl!,
     token: config.accessToken
   });
+}
+
+async function readWorkspaceKeyVault(config: CliConfig, passphrase: string) {
+  if (!config.encryptedWorkspaceKeys) {
+    return {} as Record<string, string>;
+  }
+
+  const decrypted = await decryptVaultPayload(config.encryptedWorkspaceKeys, passphrase);
+  return JSON.parse(decrypted) as Record<string, string>;
 }
 
 function printHelp() {

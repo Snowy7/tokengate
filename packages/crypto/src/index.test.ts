@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   bootstrapWorkspace,
+  decryptVaultPayload,
   decryptRevisionPayload,
+  encryptVaultPayload,
   encryptRevisionPayload,
   generateDeviceKeyPair,
   restoreWorkspaceKeyFromRecoveryPhrase,
@@ -31,5 +33,11 @@ describe("crypto", () => {
 
     expect(unwrapped).toBe(workspace.workspaceKey);
   });
-});
 
+  test("encrypts local vault payloads with a passphrase", async () => {
+    const encrypted = await encryptVaultPayload(JSON.stringify({ workspace: "key" }), "secret-passphrase");
+    const decrypted = await decryptVaultPayload(encrypted, "secret-passphrase");
+
+    expect(JSON.parse(decrypted)).toEqual({ workspace: "key" });
+  });
+});
