@@ -1,3 +1,6 @@
+# Triggered on: every push to main + every pull request
+# - verify: runs tests, typecheck, and builds (always)
+# - deploy-convex: deploys Convex schema/functions (only on main push, after verify passes)
 name: ci
 
 on:

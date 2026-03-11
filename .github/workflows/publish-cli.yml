@@ -1,3 +1,6 @@
+# Triggered on: GitHub Release created (e.g. tag v0.1.1 → Release → Publish)
+# - Builds the CLI bundle and publishes @tokengate/cli to npm
+# - Uses OIDC trusted publishers — no NPM_TOKEN needed
 name: publish-cli
 
 on:
