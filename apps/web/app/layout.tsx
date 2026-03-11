@@ -3,6 +3,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Tokengate.dev",
   description: "Zero-knowledge environment secret sync for teams."
@@ -19,4 +21,3 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     </ClerkProvider>
   );
 }
-

@@ -24,6 +24,14 @@ bun install
 bun test
 ```
 
+## Production setup
+
+1. Create a Clerk JWT template named `convex`.
+2. Set `CLERK_JWT_ISSUER_DOMAIN` to your Clerk issuer domain.
+3. Set `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_DEPLOYMENT` from your Convex deployment.
+4. Deploy `apps/web` to Vercel and point the project root to this monorepo.
+5. Run Convex separately with the same environment variables.
+
 ### Run the web app
 
 ```bash
@@ -49,6 +57,5 @@ See [`.env.example`](/home/islam/projects/env-sync/.env.example).
 ## Notes
 
 - The shared crypto and env normalization code is implemented and tested.
-- The web app, CLI, and Convex layers are scaffolded around the approved architecture.
-- Clerk and Convex runtime wiring will work after dependencies are installed and the relevant project credentials are configured.
-
+- The web app and CLI both talk to the same Convex function contract.
+- Clerk and Convex runtime wiring will work after the relevant project credentials are configured.

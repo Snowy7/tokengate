@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 
+export const dynamic = "force-dynamic";
+
 export default function MarketingPage() {
   return (
     <main className="page-shell hero">
@@ -70,4 +72,3 @@ export default function MarketingPage() {
     </main>
   );
 }
-

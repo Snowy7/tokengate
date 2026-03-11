@@ -92,6 +92,16 @@ export const createProject = mutation({
   }
 });
 
+export const listProjects = query({
+  args: {
+    workspaceId: v.id("workspaces")
+  },
+  handler: async (ctx, args) => {
+    await requireWorkspaceRole(ctx, args.workspaceId, ["owner", "admin", "member", "viewer"]);
+    return ctx.db.query("projects").withIndex("by_workspace", (query) => query.eq("workspaceId", args.workspaceId)).collect();
+  }
+});
+
 export const createEnvironment = mutation({
   args: {
     projectId: v.id("projects"),
@@ -125,5 +135,40 @@ export const createEnvironment = mutation({
     });
 
     return environmentId;
+  }
+});
+
+export const listEnvironments = query({
+  args: {
+    projectId: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member", "viewer"]);
+    return ctx.db.query("environments").withIndex("by_project", (query) => query.eq("projectId", args.projectId)).collect();
+  }
+});
+
+export const getSecretSetForEnvironment = query({
+  args: {
+    environmentId: v.id("environments")
+  },
+  handler: async (ctx, args) => {
+    const environment = await ctx.db.get(args.environmentId);
+    if (!environment) {
+      throw new Error("Environment not found");
+    }
+
+    const project = await ctx.db.get(environment.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member", "viewer"]);
+    return ctx.db.query("secretSets").withIndex("by_environment", (query) => query.eq("environmentId", args.environmentId)).unique();
   }
 });

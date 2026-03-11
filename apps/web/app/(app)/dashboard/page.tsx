@@ -1,6 +1,7 @@
 import { UserButton } from "@clerk/nextjs";
-import { SecretEditor } from "@/components/secret-editor";
-import { WorkspaceOnboarding } from "@/components/workspace-onboarding";
+import { DashboardClient } from "@/components/dashboard-client";
+
+export const dynamic = "force-dynamic";
 
 export default function DashboardPage() {
   return (
@@ -15,11 +16,7 @@ export default function DashboardPage() {
         <UserButton />
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1.1fr 0.9fr" }}>
-        <WorkspaceOnboarding />
-        <SecretEditor />
-      </div>
+      <DashboardClient />
     </main>
   );
 }
-

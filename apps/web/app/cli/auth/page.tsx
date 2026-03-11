@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default function CliAuthPage() {
   const params = useSearchParams();
   const [approved, setApproved] = useState(false);
@@ -16,12 +18,13 @@ export default function CliAuthPage() {
       return null;
     }
 
-    const redirect = new URL(callbackUrl);
-    redirect.searchParams.set("state", state);
-    redirect.searchParams.set("token", `demo-token-${state}`);
-    redirect.searchParams.set("device_id", `device_${state}`);
-    return redirect.toString();
-  }, [callbackUrl, state]);
+    const approveUrl = new URL("http://tokengate.local/api/cli/device-flow/approve");
+    approveUrl.searchParams.set("callback", callbackUrl);
+    approveUrl.searchParams.set("state", state);
+    approveUrl.searchParams.set("device_name", deviceName ?? "tokengate-cli");
+    approveUrl.searchParams.set("public_key", params.get("public_key") ?? "");
+    return `${approveUrl.pathname}${approveUrl.search}`;
+  }, [callbackUrl, deviceName, params, state]);
 
   return (
     <main className="page-shell hero">
@@ -34,8 +37,8 @@ export default function CliAuthPage() {
         </div>
 
         <p className="muted" style={{ lineHeight: 1.6 }}>
-          This page demonstrates the browser device flow shape for the Tokengate CLI. In production, the approval
-          action would register the device, store the public key, and mint a device-scoped token.
+          Approving this device registers its public key in Convex and returns a Clerk-issued Convex token back to the
+          CLI callback.
         </p>
 
         {approvalHref ? (

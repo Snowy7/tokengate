@@ -12,7 +12,9 @@ export async function loadConfig(): Promise<CliConfig> {
   } catch {
     return {
       appUrl: process.env.TOKENGATE_APP_URL ?? "http://localhost:3000",
-      apiUrl: process.env.TOKENGATE_API_URL ?? process.env.TOKENGATE_APP_URL ?? "http://localhost:3000"
+      apiUrl: process.env.TOKENGATE_API_URL ?? process.env.TOKENGATE_APP_URL ?? "http://localhost:3000",
+      convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
+      workspaceKeys: {}
     };
   }
 }
@@ -25,4 +27,3 @@ export async function saveConfig(config: CliConfig) {
 export function getConfigPath() {
   return CONFIG_PATH;
 }
-

@@ -142,11 +142,40 @@ export interface DeviceLoginSession {
 export interface CliConfig {
   appUrl: string;
   apiUrl: string;
+  convexUrl?: string;
   deviceId?: string;
   deviceLabel?: string;
   accessToken?: string;
   privateKey?: JsonWebKey;
   publicKey?: JsonWebKey;
   lastWorkspaceId?: string;
+  workspaceKeys?: Record<string, string>;
 }
 
+export interface WorkspaceWithMembership {
+  workspace: Workspace | null;
+  membership: WorkspaceMember;
+}
+
+export interface EnvironmentWithSecretSet {
+  environment: Environment;
+  secretSet: SecretSet | null;
+}
+
+export const convexFunctions = {
+  listWorkspaces: "workspaces:listWorkspaces",
+  createWorkspace: "workspaces:createWorkspace",
+  createProject: "workspaces:createProject",
+  listProjects: "workspaces:listProjects",
+  createEnvironment: "workspaces:createEnvironment",
+  listEnvironments: "workspaces:listEnvironments",
+  getSecretSetForEnvironment: "workspaces:getSecretSetForEnvironment",
+  createRevision: "revisions:createRevision",
+  getLatestRevision: "revisions:getLatestRevision",
+  listRevisionHistory: "revisions:listRevisionHistory",
+  registerDevice: "devices:registerDevice",
+  listDevices: "devices:listDevices",
+  revokeDevice: "devices:revokeDevice"
+} as const;
+
+export type ConvexFunctionName = (typeof convexFunctions)[keyof typeof convexFunctions];
