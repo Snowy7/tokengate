@@ -12,6 +12,7 @@ Tokengate.dev is a hosted, zero-knowledge environment secret manager built as a 
 ## Stack
 
 - Bun workspaces
+- Turborepo
 - Next.js App Router
 - Clerk auth
 - Convex backend
@@ -22,7 +23,7 @@ Tokengate.dev is a hosted, zero-knowledge environment secret manager built as a 
 ```bash
 bun install
 bun test
-bun run check
+bun run verify
 ```
 
 ## Production setup
@@ -40,6 +41,12 @@ bun run check
 bun run dev:web
 ```
 
+### Run web + Convex together
+
+```bash
+turbo run dev --parallel --filter=tokengate-dev --filter=@tokengate/web
+```
+
 ### Run the CLI locally
 
 ```bash
@@ -51,6 +58,11 @@ bun run dev:cli -- status
 ```bash
 bun run dev:convex
 ```
+
+## Environment loading
+
+The root [`.env.local`](/home/islam/projects/env-sync/.env.local) is the source of truth for local development.
+The web app, root Convex command, and CLI dev commands all load that same file explicitly.
 
 ## Required environment variables
 
