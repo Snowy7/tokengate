@@ -149,6 +149,9 @@ export interface CliConfig {
   privateKey?: JsonWebKey;
   publicKey?: JsonWebKey;
   lastWorkspaceId?: string;
+  lastProjectId?: string;
+  lastEnvironmentId?: string;
+  lastSecretSetId?: string;
   encryptedWorkspaceKeys?: string;
 }
 

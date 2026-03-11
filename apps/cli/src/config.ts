@@ -12,6 +12,9 @@ interface StoredCliConfig {
   convexUrl?: string;
   deviceLabel?: string;
   lastWorkspaceId?: string;
+  lastProjectId?: string;
+  lastEnvironmentId?: string;
+  lastSecretSetId?: string;
   encryptedWorkspaceKeys?: string;
   encryptedLocalState?: string;
   deviceId?: string;
@@ -54,6 +57,9 @@ export async function loadConfig(): Promise<CliConfig> {
       convexUrl: stored.convexUrl ?? process.env.NEXT_PUBLIC_CONVEX_URL,
       deviceLabel: stored.deviceLabel,
       lastWorkspaceId: stored.lastWorkspaceId,
+      lastProjectId: stored.lastProjectId,
+      lastEnvironmentId: stored.lastEnvironmentId,
+      lastSecretSetId: stored.lastSecretSetId,
       encryptedWorkspaceKeys: stored.encryptedWorkspaceKeys
     };
 
@@ -115,6 +121,9 @@ export async function saveConfig(config: CliConfig) {
     convexUrl: config.convexUrl,
     deviceLabel: config.deviceLabel,
     lastWorkspaceId: config.lastWorkspaceId,
+    lastProjectId: config.lastProjectId,
+    lastEnvironmentId: config.lastEnvironmentId,
+    lastSecretSetId: config.lastSecretSetId,
     encryptedWorkspaceKeys: config.encryptedWorkspaceKeys,
     encryptedLocalState
   };

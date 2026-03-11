@@ -4,12 +4,16 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { dirname, resolve } from "node:path";
+import { stdin as input, stdout as output } from "node:process";
+import { createInterface } from "node:readline/promises";
 import {
+  bootstrapWorkspace,
   decryptVaultPayload,
   decryptRevisionPayload,
   encryptVaultPayload,
   encryptRevisionPayload,
   generateDeviceKeyPair,
+  wrapWorkspaceKeyForDevice,
   restoreWorkspaceKeyFromRecoveryPhrase
 } from "@tokengate/crypto";
 import { normalizeEnvDocument } from "@tokengate/env-format";
@@ -19,7 +23,11 @@ import {
   type CliConfig,
   type CreateRevisionResult,
   type DeviceLoginSession,
+  type Environment,
+  type Project,
   type SecretRevision,
+  type SecretSet,
+  type Workspace,
   type WorkspaceWithMembership
 } from "@tokengate/sdk";
 import { getConfigPath, loadConfig, saveConfig } from "./config";
@@ -49,6 +57,8 @@ async function main(commandName: string | undefined, commandArgs: string[]) {
       return handlePull(commandArgs);
     case "history":
       return handleHistory(commandArgs);
+    case "setup":
+      return handleInit([]);
     default:
       return printHelp();
   }
@@ -142,6 +152,10 @@ async function handleLogin(args: string[]) {
 }
 
 async function handleInit(args: string[]) {
+  if (args.length < 2) {
+    return runInitWizard();
+  }
+
   const config = await loadConfig();
   const workspaceId = args[0];
   const recoveryPhrase = args[1];
@@ -153,18 +167,7 @@ async function handleInit(args: string[]) {
   const workspaceKey = restoreWorkspaceKeyFromRecoveryPhrase(recoveryPhrase);
   const workspaceKeys = await readWorkspaceKeyVault(config, passphrase);
   workspaceKeys[workspaceId] = workspaceKey;
-  await saveConfig({
-    ...config,
-    encryptedWorkspaceKeys: await encryptVaultPayload(JSON.stringify(workspaceKeys), passphrase),
-    lastWorkspaceId: workspaceId,
-    privateKey: config.privateKey,
-    publicKey: config.publicKey,
-    accessToken: config.accessToken,
-    appUrl: config.appUrl,
-    apiUrl: config.apiUrl,
-    deviceId: config.deviceId,
-    deviceLabel: config.deviceLabel
-  });
+  await saveWorkspaceContext(config, workspaceKeys, { workspaceId });
 
   printSuccess("Recovery phrase accepted.");
   printInfo(`Stored workspace key for ${formatCode(workspaceId)}.`);
@@ -183,6 +186,9 @@ async function handleStatus() {
   console.log(`Local auth: ${config.accessToken ? "encrypted at rest" : "not stored"}`);
   console.log(`Workspace keys: ${hasWorkspaceKeys ? "present" : "not initialized"}`);
   console.log(`Last workspace: ${config.lastWorkspaceId ?? "none"}`);
+  console.log(`Last project: ${config.lastProjectId ?? "none"}`);
+  console.log(`Last environment: ${config.lastEnvironmentId ?? "none"}`);
+  console.log(`Last secret set: ${config.lastSecretSetId ?? "none"}`);
 }
 
 async function handleWorkspaces() {
@@ -202,14 +208,14 @@ async function handleWorkspaces() {
 
 async function handlePush(args: string[]) {
   const filePath = resolve(args[0] ?? ".env");
-  const workspaceId = args[1];
-  const secretSetId = args[2];
+  const config = await requireAuthenticatedConfig();
+  const workspaceId = args[1] ?? config.lastWorkspaceId;
+  const secretSetId = args[2] ?? config.lastSecretSetId;
 
   if (!workspaceId || !secretSetId) {
-    throw new Error("Usage: tokengate push <file> <workspace-id> <secret-set-id>");
+    throw new Error("Usage: tokengate push <file> [workspace-id] [secret-set-id]. Run `tokengate init` first.");
   }
 
-  const config = await requireAuthenticatedConfig();
   const passphrase = process.env.TOKENGATE_VAULT_PASSPHRASE;
   if (!passphrase) {
     throw new Error("Set TOKENGATE_VAULT_PASSPHRASE before pushing secrets.");
@@ -242,15 +248,15 @@ async function handlePush(args: string[]) {
 }
 
 async function handlePull(args: string[]) {
-  const secretSetId = args[0];
-  const workspaceId = args[1];
+  const config = await requireAuthenticatedConfig();
+  const secretSetId = args[0] ?? config.lastSecretSetId;
+  const workspaceId = args[1] ?? config.lastWorkspaceId;
   const outputPath = resolve(args[2] ?? ".env");
 
   if (!secretSetId || !workspaceId) {
-    throw new Error("Usage: tokengate pull <secret-set-id> <workspace-id> [output]");
+    throw new Error("Usage: tokengate pull [secret-set-id] [workspace-id] [output]. Run `tokengate init` first.");
   }
 
-  const config = await requireAuthenticatedConfig();
   const passphrase = process.env.TOKENGATE_VAULT_PASSPHRASE;
   if (!passphrase) {
     throw new Error("Set TOKENGATE_VAULT_PASSPHRASE before pulling secrets.");
@@ -277,12 +283,12 @@ async function handlePull(args: string[]) {
 }
 
 async function handleHistory(args: string[]) {
-  const secretSetId = args[0];
+  const config = await requireAuthenticatedConfig();
+  const secretSetId = args[0] ?? config.lastSecretSetId;
   if (!secretSetId) {
-    throw new Error("Usage: tokengate history <secret-set-id>");
+    throw new Error("Usage: tokengate history [secret-set-id]. Run `tokengate init` first.");
   }
 
-  const config = await requireAuthenticatedConfig();
   const client = getConvexClient(config);
   const history = await client.query<SecretRevision[]>(convexFunctions.listRevisionHistory, { secretSetId });
   if (history.length === 0) {
@@ -327,16 +333,258 @@ async function readWorkspaceKeyVault(config: CliConfig, passphrase: string) {
   return JSON.parse(decrypted) as Record<string, string>;
 }
 
+async function runInitWizard() {
+  const config = await requireAuthenticatedConfig();
+  const passphrase = process.env.TOKENGATE_VAULT_PASSPHRASE;
+  if (!passphrase) {
+    throw new Error("Set TOKENGATE_VAULT_PASSPHRASE before running `tokengate init`.");
+  }
+  if (!config.publicKey) {
+    throw new Error("This device is missing its local keypair. Run `tokengate login` again.");
+  }
+
+  const client = getConvexClient(config);
+  const prompt = createPrompt();
+  const workspaceKeys = await readWorkspaceKeyVault(config, passphrase);
+
+  try {
+    printBanner("Tokengate Setup");
+    printMuted("This will guide you through selecting or creating a workspace, project, and environment.");
+
+    const workspaces = await client.query<WorkspaceWithMembership[]>(convexFunctions.listWorkspaces, {});
+    const workspaceSelection = await chooseWorkspace(prompt, client, config, workspaces, workspaceKeys);
+
+    let selectedWorkspaceId = workspaceSelection.workspace.id;
+    let nextWorkspaceKeys = workspaceSelection.workspaceKeys;
+
+    const projects = await client.query<Project[]>(convexFunctions.listProjects, {
+      workspaceId: selectedWorkspaceId
+    });
+    const project = await chooseProject(prompt, client, selectedWorkspaceId, projects);
+
+    const environments = await client.query<Environment[]>(convexFunctions.listEnvironments, {
+      projectId: project.id
+    });
+    const environment = await chooseEnvironment(prompt, client, project.id, environments);
+
+    const secretSet = await client.query<SecretSet | null>(convexFunctions.getSecretSetForEnvironment, {
+      environmentId: environment.id
+    });
+
+    if (!secretSet) {
+      throw new Error("The selected environment does not have a secret set yet.");
+    }
+
+    await saveWorkspaceContext(config, nextWorkspaceKeys, {
+      workspaceId: selectedWorkspaceId,
+      projectId: project.id,
+      environmentId: environment.id,
+      secretSetId: secretSet.id
+    });
+
+    printSuccess("CLI target is ready.");
+    console.log(`Workspace: ${workspaceSelection.workspace.name}  ${formatCode(selectedWorkspaceId)}`);
+    console.log(`Project:   ${project.name}  ${formatCode(project.id)}`);
+    console.log(`Env:       ${environment.name}  ${formatCode(environment.id)}`);
+    console.log(`SecretSet: ${formatCode(secretSet.id)}`);
+
+    const nextAction = await prompt.select("What do you want to do next?", [
+      "Finish setup",
+      "Pull the latest env file",
+      "Push a local env file"
+    ]);
+
+    if (nextAction === 1) {
+      const outputPath = await prompt.input("Output file", ".env");
+      await handlePull([secretSet.id, selectedWorkspaceId, outputPath]);
+    } else if (nextAction === 2) {
+      const inputPath = await prompt.input("Env file to push", ".env");
+      await handlePush([inputPath, selectedWorkspaceId, secretSet.id]);
+    }
+  } finally {
+    prompt.close();
+  }
+}
+
+async function chooseWorkspace(
+  prompt: ReturnType<typeof createPrompt>,
+  client: TokengateConvexClient,
+  config: CliConfig,
+  workspaces: WorkspaceWithMembership[],
+  workspaceKeys: Record<string, string>
+) {
+  const options = workspaces.map((entry) => ({
+    label: `${entry.workspace?.name ?? "Unknown"} (${entry.membership.role})`,
+    value: entry.workspace
+  }));
+  options.push({ label: "Create new workspace", value: null });
+
+  const choice = await prompt.select("Choose a workspace", options.map((item) => item.label));
+  const selected = options[choice]?.value;
+
+  if (!selected) {
+    const name = await prompt.input("Workspace name", "Acme");
+    const typeIndex = await prompt.select("Workspace type", ["Team", "Personal"]);
+    const bootstrap = await bootstrapWorkspace();
+    const wrapped = await wrapWorkspaceKeyForDevice(bootstrap.workspaceKey, config.publicKey!);
+    const workspaceId = await client.mutation<string>(convexFunctions.createWorkspace, {
+      name,
+      slug: toSlug(name),
+      type: typeIndex === 0 ? "team" : "personal",
+      ownerWrappedWorkspaceKey: wrapped
+    });
+
+    const nextWorkspaceKeys = { ...workspaceKeys, [workspaceId]: bootstrap.workspaceKey };
+    await saveWorkspaceContext(config, nextWorkspaceKeys, { workspaceId });
+    printSuccess(`Created workspace ${formatCode(name)}.`);
+    printWarning("Save this recovery phrase offline before continuing:");
+    console.log(bootstrap.recoveryPhrase);
+
+    return {
+      workspace: {
+        id: workspaceId,
+        name,
+        slug: toSlug(name),
+        type: typeIndex === 0 ? "team" : "personal",
+        createdAt: Date.now(),
+        createdBy: "me"
+      } satisfies Workspace,
+      workspaceKeys: nextWorkspaceKeys
+    };
+  }
+
+  const nextWorkspaceKeys = { ...workspaceKeys };
+  if (!nextWorkspaceKeys[selected.id]) {
+    const importKey = await prompt.confirm("This workspace is not linked locally yet. Import its recovery phrase now?", true);
+    if (importKey) {
+      const recoveryPhrase = await prompt.input("Recovery phrase");
+      nextWorkspaceKeys[selected.id] = restoreWorkspaceKeyFromRecoveryPhrase(recoveryPhrase);
+      await saveWorkspaceContext(config, nextWorkspaceKeys, { workspaceId: selected.id });
+      printSuccess("Workspace linked locally.");
+    } else {
+      printWarning("Continuing without a local workspace key. Pull/push will fail until you import it.");
+    }
+  }
+
+  return {
+    workspace: selected,
+    workspaceKeys: nextWorkspaceKeys
+  };
+}
+
+async function chooseProject(
+  prompt: ReturnType<typeof createPrompt>,
+  client: TokengateConvexClient,
+  workspaceId: string,
+  projects: Project[]
+) {
+  if (projects.length === 0) {
+    printMuted("No projects found in this workspace yet.");
+  }
+
+  const options: Array<{ label: string; value: Project | null }> = projects.map((project) => ({
+    label: project.name,
+    value: project
+  }));
+  options.push({ label: "Create new project", value: null });
+  const choice = await prompt.select("Choose a project", options.map((item) => item.label));
+  const selected = options[choice]?.value;
+
+  if (selected) {
+    return selected;
+  }
+
+  const name = await prompt.input("Project name", "web");
+  const projectId = await client.mutation<string>(convexFunctions.createProject, {
+    workspaceId,
+    name,
+    slug: toSlug(name)
+  });
+  printSuccess(`Created project ${formatCode(name)}.`);
+  return {
+    id: projectId,
+    workspaceId,
+    name,
+    slug: toSlug(name),
+    createdAt: Date.now()
+  };
+}
+
+async function chooseEnvironment(
+  prompt: ReturnType<typeof createPrompt>,
+  client: TokengateConvexClient,
+  projectId: string,
+  environments: Environment[]
+) {
+  if (environments.length === 0) {
+    printMuted("No environments found in this project yet.");
+  }
+
+  const options: Array<{ label: string; value: Environment | null }> = environments.map((environment) => ({
+    label: environment.name,
+    value: environment
+  }));
+  options.push({ label: "Create new environment", value: null });
+  const choice = await prompt.select("Choose an environment", options.map((item) => item.label));
+  const selected = options[choice]?.value;
+
+  if (selected) {
+    return selected;
+  }
+
+  const name = await prompt.input("Environment name", "development");
+  const environmentId = await client.mutation<string>(convexFunctions.createEnvironment, {
+    projectId,
+    name,
+    slug: toSlug(name)
+  });
+  printSuccess(`Created environment ${formatCode(name)}.`);
+  return {
+    id: environmentId,
+    projectId,
+    name,
+    slug: toSlug(name),
+    createdAt: Date.now()
+  };
+}
+
+async function saveWorkspaceContext(
+  config: CliConfig,
+  workspaceKeys: Record<string, string>,
+  target: {
+    workspaceId?: string;
+    projectId?: string;
+    environmentId?: string;
+    secretSetId?: string;
+  }
+) {
+  const passphrase = process.env.TOKENGATE_VAULT_PASSPHRASE;
+  if (!passphrase) {
+    throw new Error("Set TOKENGATE_VAULT_PASSPHRASE before saving workspace keys.");
+  }
+
+  await saveConfig({
+    ...config,
+    encryptedWorkspaceKeys: await encryptVaultPayload(JSON.stringify(workspaceKeys), passphrase),
+    lastWorkspaceId: target.workspaceId ?? config.lastWorkspaceId,
+    lastProjectId: target.projectId ?? config.lastProjectId,
+    lastEnvironmentId: target.environmentId ?? config.lastEnvironmentId,
+    lastSecretSetId: target.secretSetId ?? config.lastSecretSetId
+  });
+}
+
 function printHelp() {
   printBanner("Tokengate CLI");
   console.log(`Commands:
   login [device-label]                 Sign in this machine in the browser
+  init                                 Guided setup for workspace, project, and environment
   init <workspace-id> <recovery>       Store a workspace key from the recovery phrase
+  setup                                Alias for interactive init
   status                               Show safe local status
   workspaces                           List available workspaces
-  push <file> <workspace-id> <set>     Encrypt and push a revision
-  pull <set> <workspace-id> [output]   Pull the latest revision and write a .env file
-  history <set>                        Show remote revision history`);
+  push <file> [workspace-id] [set]     Encrypt and push a revision
+  pull [set] [workspace-id] [output]   Pull the latest revision and write a .env file
+  history [set]                        Show remote revision history`);
   console.log();
   console.log("Set TOKENGATE_CLI_PASSPHRASE or TOKENGATE_VAULT_PASSPHRASE to protect local auth and workspace keys.");
 }
@@ -378,6 +626,52 @@ function maskValue(value: string | undefined | null) {
 
 function formatCode(value: string) {
   return `\`${value}\``;
+}
+
+function toSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "untitled";
+}
+
+function createPrompt() {
+  const rl = createInterface({ input, output });
+
+  return {
+    async input(label: string, defaultValue?: string) {
+      const suffix = defaultValue ? ` (${defaultValue})` : "";
+      const answer = (await rl.question(`${label}${suffix}: `)).trim();
+      return answer || defaultValue || "";
+    },
+    async confirm(label: string, defaultValue = true) {
+      const hint = defaultValue ? "Y/n" : "y/N";
+      const answer = (await rl.question(`${label} [${hint}]: `)).trim().toLowerCase();
+      if (!answer) {
+        return defaultValue;
+      }
+      return answer === "y" || answer === "yes";
+    },
+    async select(label: string, options: string[]) {
+      console.log(label);
+      options.forEach((option, index) => {
+        console.log(`  ${index + 1}. ${option}`);
+      });
+
+      while (true) {
+        const raw = (await rl.question("Choose a number: ")).trim();
+        const parsed = Number(raw);
+        if (Number.isInteger(parsed) && parsed >= 1 && parsed <= options.length) {
+          return parsed - 1;
+        }
+        printWarning("Enter one of the listed numbers.");
+      }
+    },
+    close() {
+      rl.close();
+    }
+  };
 }
 
 async function openInBrowser(url: string) {
