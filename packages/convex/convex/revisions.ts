@@ -54,6 +54,64 @@ export const getLatestRevision = query({
   }
 });
 
+export const restoreRevision = mutation({
+  args: {
+    secretSetId: v.id("secretSets"),
+    targetRevision: v.number()
+  },
+  handler: async (ctx, args) => {
+    const { workspaceId, secretSet } = await getWorkspaceIdForSecretSet(ctx, args.secretSetId);
+    const { identity } = await requireWorkspaceRole(ctx, workspaceId, ["owner", "admin", "member"]);
+
+    // Find the target revision
+    const targetRev = await ctx.db
+      .query("secretRevisions")
+      .withIndex("by_secret_set_and_revision", (query) =>
+        query.eq("secretSetId", args.secretSetId).eq("revision", args.targetRevision)
+      )
+      .unique();
+
+    if (!targetRev) {
+      throw new ConvexError("Target revision not found");
+    }
+
+    const latestRevision = secretSet.latestRevision ?? 0;
+    const newRevision = latestRevision + 1;
+
+    // Copy the old revision's encrypted payload into a new revision
+    const revisionId = await ctx.db.insert("secretRevisions", {
+      secretSetId: args.secretSetId,
+      revision: newRevision,
+      ciphertext: targetRev.ciphertext,
+      wrappedDataKey: targetRev.wrappedDataKey,
+      contentHash: targetRev.contentHash,
+      baseRevision: latestRevision,
+      createdAt: Date.now(),
+      createdBy: identity.subject
+    });
+
+    await ctx.db.patch(args.secretSetId, {
+      latestRevision: newRevision
+    });
+
+    await createAuditEvent(ctx, {
+      workspaceId,
+      actorId: identity.subject,
+      action: "revision.restored",
+      subjectId: revisionId,
+      metadata: {
+        restoredFromRevision: args.targetRevision,
+        newRevision
+      }
+    });
+
+    return {
+      newRevision,
+      revisionId
+    };
+  }
+});
+
 export const createRevision = mutation({
   args: {
     secretSetId: v.id("secretSets"),

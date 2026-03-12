@@ -44,6 +44,7 @@ export default defineSchema({
 
   secretSets: defineTable({
     environmentId: v.id("environments"),
+    filePath: v.optional(v.string()),
     keySalt: v.string(),
     latestRevision: v.optional(v.number()),
     createdAt: v.number()

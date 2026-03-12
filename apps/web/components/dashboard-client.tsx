@@ -101,6 +101,18 @@ function IconCopy({ size = 14 }: { size?: number }) {
   );
 }
 
+function IconRestore({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></svg>
+  );
+}
+
+function IconFile({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+  );
+}
+
 function IconEye({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -157,6 +169,121 @@ interface Toast {
 
 let toastCounter = 0;
 
+interface EnvFileMeta {
+  secretSetId: string;
+  filePath: string | null;
+  latestRevision: number | null;
+}
+
+interface EnvironmentWithMeta {
+  environment: Environment;
+  fileCount: number;
+  files: EnvFileMeta[];
+  latestRevisionTimestamp: number | null;
+}
+
+type DiffLineKind = "added" | "removed" | "changed" | "unchanged";
+
+interface DiffLine {
+  kind: DiffLineKind;
+  key: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
+function computeEnvDiff(oldEntries: EnvEntry[], newEntries: EnvEntry[]): DiffLine[] {
+  const oldMap = new Map(oldEntries.filter((e) => e.key).map((e) => [e.key, e.value]));
+  const newMap = new Map(newEntries.filter((e) => e.key).map((e) => [e.key, e.value]));
+  const allKeys = new Set([...oldMap.keys(), ...newMap.keys()]);
+  const lines: DiffLine[] = [];
+
+  for (const key of allKeys) {
+    const inOld = oldMap.has(key);
+    const inNew = newMap.has(key);
+    if (inOld && inNew) {
+      const ov = oldMap.get(key)!;
+      const nv = newMap.get(key)!;
+      if (ov === nv) {
+        lines.push({ kind: "unchanged", key, oldValue: ov, newValue: nv });
+      } else {
+        lines.push({ kind: "changed", key, oldValue: ov, newValue: nv });
+      }
+    } else if (inOld) {
+      lines.push({ kind: "removed", key, oldValue: oldMap.get(key)! });
+    } else {
+      lines.push({ kind: "added", key, newValue: newMap.get(key)! });
+    }
+  }
+
+  // Sort: changed first, then added, then removed, then unchanged
+  const order: Record<DiffLineKind, number> = { changed: 0, added: 1, removed: 2, unchanged: 3 };
+  lines.sort((a, b) => order[a.kind] - order[b.kind]);
+  return lines;
+}
+
+function RevisionDiff({ oldEntries, newEntries, oldLabel, newLabel }: {
+  oldEntries: EnvEntry[];
+  newEntries: EnvEntry[];
+  oldLabel: string;
+  newLabel: string;
+}) {
+  const diff = computeEnvDiff(oldEntries, newEntries);
+  const changes = diff.filter((d) => d.kind !== "unchanged");
+  const unchanged = diff.filter((d) => d.kind === "unchanged");
+
+  if (changes.length === 0) {
+    return <p className="muted" style={{ fontSize: 13, padding: "8px 0" }}>No differences.</p>;
+  }
+
+  const kindStyle: Record<DiffLineKind, React.CSSProperties> = {
+    added: { background: "rgba(39, 174, 96, 0.10)", borderLeft: "3px solid #27ae60" },
+    removed: { background: "rgba(192, 57, 43, 0.10)", borderLeft: "3px solid #c0392b" },
+    changed: { background: "rgba(241, 196, 15, 0.10)", borderLeft: "3px solid #f1c40f" },
+    unchanged: { opacity: 0.5 },
+  };
+
+  const kindLabel: Record<DiffLineKind, string> = {
+    added: "+",
+    removed: "\u2212",
+    changed: "~",
+    unchanged: " ",
+  };
+
+  return (
+    <div style={{ fontSize: 13, fontFamily: "var(--font-mono)" }}>
+      <div style={{ display: "flex", gap: 16, marginBottom: 8, fontSize: 12 }}>
+        <span className="muted">{oldLabel}</span>
+        <span className="muted">{"\u2192"}</span>
+        <span className="muted">{newLabel}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        {changes.map((line) => (
+          <div key={line.key} style={{ padding: "6px 10px", ...kindStyle[line.kind], display: "flex", gap: 8, alignItems: "baseline" }}>
+            <span style={{ width: 14, textAlign: "center", flexShrink: 0, fontWeight: 700, fontSize: 14 }}>{kindLabel[line.kind]}</span>
+            <span style={{ fontWeight: 600, minWidth: 120 }}>{line.key}</span>
+            {line.kind === "changed" && (
+              <span style={{ flex: 1, wordBreak: "break-all" }}>
+                <span style={{ color: "#c0392b", textDecoration: "line-through" }}>{line.oldValue}</span>
+                {" "}
+                <span style={{ color: "#27ae60" }}>{line.newValue}</span>
+              </span>
+            )}
+            {line.kind === "removed" && (
+              <span style={{ flex: 1, color: "#c0392b", wordBreak: "break-all" }}>{line.oldValue}</span>
+            )}
+            {line.kind === "added" && (
+              <span style={{ flex: 1, color: "#27ae60", wordBreak: "break-all" }}>{line.newValue}</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {unchanged.length > 0 && (
+        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>{unchanged.length} unchanged variable{unchanged.length !== 1 ? "s" : ""}</p>
+      )}
+    </div>
+  );
+}
+
 type ModalKind = "workspace" | "project" | "environment" | null;
 
 // ---------------------------------------------------------------------------
@@ -168,10 +295,12 @@ export function DashboardClient() {
   const [workspaces, setWorkspaces] = useState<WorkspaceWithMembership[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [environmentsMeta, setEnvironmentsMeta] = useState<EnvironmentWithMeta[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
-  const [secretSet, setSecretSet] = useState<SecretSet | null>(null);
+  const [selectedSecretSetId, setSelectedSecretSetId] = useState("");
+  const [secretSets, setSecretSets] = useState<SecretSet[]>([]);
   const [latestRevision, setLatestRevision] = useState<SecretRevision | null>(null);
   const [history, setHistory] = useState<SecretRevision[]>([]);
 
@@ -197,6 +326,19 @@ export function DashboardClient() {
   const [modalPassword, setModalPassword] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // --- Revision diff ---
+  const [expandedRevisionId, setExpandedRevisionId] = useState<string | null>(null);
+  const [expandedRevisionEntries, setExpandedRevisionEntries] = useState<EnvEntry[] | null>(null);
+  const [loadingRevisionDiff, setLoadingRevisionDiff] = useState(false);
+
+  // --- Confirmation dialog ---
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
   // --- Derived ---
   const selectedWorkspace = useMemo(
     () => workspaces.find((w) => w.workspace?.id === selectedWorkspaceId)?.workspace ?? null,
@@ -209,6 +351,10 @@ export function DashboardClient() {
   const selectedEnvironment = useMemo(
     () => environments.find((e) => e.id === selectedEnvironmentId) ?? null,
     [selectedEnvironmentId, environments],
+  );
+  const selectedSecretSet = useMemo(
+    () => secretSets.find((s) => s.id === selectedSecretSetId) ?? null,
+    [selectedSecretSetId, secretSets],
   );
   const isEnvUnlocked = derivedKey !== null;
 
@@ -245,46 +391,103 @@ export function DashboardClient() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    if (!selectedProjectId) { setEnvironments([]); setLoadingEnvironments(false); return; }
+    if (!selectedProjectId) { setEnvironments([]); setEnvironmentsMeta([]); setLoadingEnvironments(false); return; }
     setLoadingEnvironments(true);
-    void fetchJson<{ environments: Environment[] }>(`/api/environments?projectId=${selectedProjectId}`).then((p) => {
-      setEnvironments(p.environments);
-      setSelectedEnvironmentId((cur) => p.environments.some((x) => x.id === cur) ? cur : p.environments[0]?.id ?? "");
+    void Promise.all([
+      fetchJson<{ environments: Environment[] }>(`/api/environments?projectId=${selectedProjectId}`),
+      fetchJson<{ environments: EnvironmentWithMeta[] }>(`/api/environments/meta?projectId=${selectedProjectId}`).catch(() => ({ environments: [] as EnvironmentWithMeta[] }))
+    ]).then(([envRes, metaRes]) => {
+      setEnvironments(envRes.environments);
+      setEnvironmentsMeta(metaRes.environments);
+      setSelectedEnvironmentId((cur) => envRes.environments.some((x) => x.id === cur) ? cur : envRes.environments[0]?.id ?? "");
     }).finally(() => setLoadingEnvironments(false));
   }, [selectedProjectId]);
 
-  // When environment changes, reset crypto state and load metadata
+  // When environment changes, reset crypto state and load secret sets
   useEffect(() => {
     setDerivedKey(null);
     setEnvPassword("");
     setEnvEntries([]);
     setDirtyFlag(false);
     setShowPassword(false);
+    setSelectedSecretSetId("");
 
     if (!selectedEnvironmentId) {
-      setSecretSet(null);
+      setSecretSets([]);
       setLatestRevision(null);
       setHistory([]);
       return;
     }
 
-    void loadSecretSetMeta(selectedEnvironmentId);
+    void loadEnvironmentSecretSets(selectedEnvironmentId);
   }, [selectedEnvironmentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function loadSecretSetMeta(environmentId: string) {
+  // When selected file (secretSet) changes, load its revision history
+  useEffect(() => {
+    setEnvEntries([]);
+    setDirtyFlag(false);
+    setExpandedRevisionId(null);
+    setExpandedRevisionEntries(null);
+
+    if (!selectedSecretSetId) {
+      setLatestRevision(null);
+      setHistory([]);
+      return;
+    }
+
+    void (async () => {
+      await loadSecretSetMeta(selectedSecretSetId);
+      // If already unlocked, auto-decrypt the new file's latest revision
+      if (derivedKey) {
+        try {
+          const lp = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${selectedSecretSetId}`);
+          if (lp.revision) {
+            const plaintext = await decryptRevisionPayload(
+              { ciphertext: lp.revision.ciphertext, wrappedDataKey: lp.revision.wrappedDataKey, contentHash: lp.revision.contentHash },
+              derivedKey,
+            );
+            setEnvEntries(parseEnvDocument(plaintext));
+          }
+        } catch {
+          // Decryption might fail if keySalt differs — ignore
+        }
+      }
+    })();
+  }, [selectedSecretSetId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadEnvironmentSecretSets(environmentId: string) {
     setLoadingSecrets(true);
     try {
-      const sp = await fetchJson<{ secretSet: SecretSet | null }>(`/api/secret-sets?environmentId=${environmentId}`);
-      setSecretSet(sp.secretSet);
-      if (!sp.secretSet?.id) {
-        setLatestRevision(null);
-        setHistory([]);
-        return;
+      const meta = environmentsMeta.find((m) => m.environment.id === environmentId);
+      if (meta && meta.files.length > 0) {
+        // Fetch full secret sets
+        const sp = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
+        setSecretSets(sp.secretSets);
+        // Auto-select first file
+        if (sp.secretSets.length > 0) {
+          setSelectedSecretSetId(sp.secretSets[0].id);
+        }
+      } else {
+        // Legacy: single secret set per environment
+        const sp = await fetchJson<{ secretSet: SecretSet | null }>(`/api/secret-sets?environmentId=${environmentId}`);
+        if (sp.secretSet) {
+          setSecretSets([sp.secretSet]);
+          setSelectedSecretSetId(sp.secretSet.id);
+        } else {
+          setSecretSets([]);
+        }
       }
-      // Fetch history and latest revision in parallel
+    } finally {
+      setLoadingSecrets(false);
+    }
+  }
+
+  async function loadSecretSetMeta(secretSetId: string) {
+    setLoadingSecrets(true);
+    try {
       const [hp, lp] = await Promise.all([
-        fetchJson<{ revisions: SecretRevision[] }>(`/api/revisions/history?secretSetId=${sp.secretSet.id}`),
-        fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${sp.secretSet.id}`),
+        fetchJson<{ revisions: SecretRevision[] }>(`/api/revisions/history?secretSetId=${secretSetId}`),
+        fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${secretSetId}`),
       ]);
       setHistory(hp.revisions.slice().sort((a, b) => b.revision - a.revision));
       setLatestRevision(lp.revision);
@@ -295,12 +498,13 @@ export function DashboardClient() {
 
   // --- Unlock environment with password ---
   function handleUnlockEnv() {
-    if (!secretSet?.keySalt || !envPassword) return;
+    const keySalt = secretSets[0]?.keySalt;
+    if (!keySalt || !envPassword) return;
     startTransition(async () => {
       try {
-        const key = await deriveEnvironmentKey(envPassword, secretSet.keySalt);
+        const key = await deriveEnvironmentKey(envPassword, keySalt);
 
-        // If there's a latest revision, try to decrypt it to verify the password
+        // If there's a latest revision on the selected file, try to decrypt it to verify the password
         if (latestRevision) {
           try {
             const plaintext = await decryptRevisionPayload(
@@ -323,43 +527,120 @@ export function DashboardClient() {
     });
   }
 
+  function handleRestoreRevision(revision: SecretRevision) {
+    if (!selectedSecretSet?.id || !derivedKey) return;
+    const filePath = selectedSecretSet.filePath || ".env";
+    setConfirmAction({
+      title: "Restore revision",
+      message: `This will restore r${revision.revision} as the current version of ${filePath}. Your current secrets will be replaced with the contents from that revision. A new revision will be created (non-destructive).`,
+      destructive: true,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            const result = await postJson<{ newRevision: number }>("/api/revisions/restore", {
+              secretSetId: selectedSecretSet.id,
+              targetRevision: revision.revision
+            });
+            pushToast(`Restored r${revision.revision} as new r${result.newRevision}.`, "success");
+            setExpandedRevisionId(null);
+            setExpandedRevisionEntries(null);
+            await loadSecretSetMeta(selectedSecretSetId);
+            const lp = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${selectedSecretSet.id}`);
+            setLatestRevision(lp.revision);
+            if (lp.revision) {
+              try {
+                const plaintext = await decryptRevisionPayload(
+                  { ciphertext: lp.revision.ciphertext, wrappedDataKey: lp.revision.wrappedDataKey, contentHash: lp.revision.contentHash },
+                  derivedKey,
+                );
+                setEnvEntries(parseEnvDocument(plaintext));
+                setDirtyFlag(false);
+              } catch {
+                pushToast("Restored, but could not decrypt. Re-enter password.", "error");
+              }
+            }
+          } catch (err) {
+            pushToast(err instanceof Error ? err.message : "Restore failed.", "error");
+          }
+        });
+      }
+    });
+  }
+
+  function handleToggleRevisionDiff(rev: SecretRevision) {
+    if (expandedRevisionId === rev.id) {
+      setExpandedRevisionId(null);
+      setExpandedRevisionEntries(null);
+      return;
+    }
+    if (!derivedKey) return;
+    setExpandedRevisionId(rev.id);
+    setExpandedRevisionEntries(null);
+    setLoadingRevisionDiff(true);
+    void (async () => {
+      try {
+        const plaintext = await decryptRevisionPayload(
+          { ciphertext: rev.ciphertext, wrappedDataKey: rev.wrappedDataKey, contentHash: rev.contentHash },
+          derivedKey,
+        );
+        setExpandedRevisionEntries(parseEnvDocument(plaintext));
+      } catch {
+        pushToast("Could not decrypt this revision.", "error");
+        setExpandedRevisionId(null);
+      } finally {
+        setLoadingRevisionDiff(false);
+      }
+    })();
+  }
+
   function handleLockEnv() {
     setDerivedKey(null);
     setEnvPassword("");
     setEnvEntries([]);
     setDirtyFlag(false);
     setShowPassword(false);
+    setExpandedRevisionId(null);
+    setExpandedRevisionEntries(null);
     pushToast("Environment locked.", "info");
   }
 
   // --- Save revision ---
   function handleSaveRevision() {
-    if (!secretSet?.id || !derivedKey) return;
-    startTransition(async () => {
-      try {
-        const normalized = normalizeEnvDocument(stringifyEnvEntries(envEntries));
-        const encrypted = await encryptRevisionPayload(normalized, derivedKey);
-        const result = await postJson<{ conflict: boolean; acceptedRevision?: number; latestRevision?: number }>("/api/revisions", {
-          secretSetId: secretSet.id,
-          baseRevision: latestRevision?.revision,
-          ciphertext: encrypted.ciphertext,
-          wrappedDataKey: encrypted.wrappedDataKey,
-          contentHash: encrypted.contentHash,
+    if (!selectedSecretSet?.id || !derivedKey) return;
+    const filePath = selectedSecretSet.filePath || ".env";
+    const varCount = envEntries.filter((e) => e.key.trim()).length;
+    setConfirmAction({
+      title: "Save encrypted revision",
+      message: `This will encrypt and save ${varCount} variable${varCount !== 1 ? "s" : ""} to ${filePath} as a new revision${latestRevision ? ` (currently at r${latestRevision.revision})` : ""}. This cannot be undone, but previous revisions remain accessible.`,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            const normalized = normalizeEnvDocument(stringifyEnvEntries(envEntries));
+            const encrypted = await encryptRevisionPayload(normalized, derivedKey);
+            const result = await postJson<{ conflict: boolean; acceptedRevision?: number; latestRevision?: number }>("/api/revisions", {
+              secretSetId: selectedSecretSet.id,
+              baseRevision: latestRevision?.revision,
+              ciphertext: encrypted.ciphertext,
+              wrappedDataKey: encrypted.wrappedDataKey,
+              contentHash: encrypted.contentHash,
+            });
+            if (result.conflict) {
+              pushToast(`Conflict: remote is at revision ${result.latestRevision}. Reload and retry.`, "error");
+              return;
+            }
+            setDirtyFlag(false);
+            pushToast(`Revision ${result.acceptedRevision} saved.`, "success");
+            await loadSecretSetMeta(selectedSecretSetId);
+            if (result.acceptedRevision !== undefined) {
+              const lp = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${selectedSecretSet.id}`);
+              setLatestRevision(lp.revision);
+            }
+          } catch (err) {
+            pushToast(err instanceof Error ? err.message : "Save failed.", "error");
+          }
         });
-        if (result.conflict) {
-          pushToast(`Conflict: remote is at revision ${result.latestRevision}. Reload and retry.`, "error");
-          return;
-        }
-        setDirtyFlag(false);
-        pushToast(`Revision ${result.acceptedRevision} saved.`, "success");
-        await loadSecretSetMeta(selectedEnvironmentId);
-        // Re-decrypt latest
-        if (result.acceptedRevision !== undefined) {
-          const lp = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${secretSet.id}`);
-          setLatestRevision(lp.revision);
-        }
-      } catch (err) {
-        pushToast(err instanceof Error ? err.message : "Save failed.", "error");
       }
     });
   }
@@ -458,7 +739,7 @@ export function DashboardClient() {
   const modalLabels: Record<NonNullable<ModalKind>, { title: string; placeholder: string }> = {
     workspace: { title: "New workspace", placeholder: "Workspace name" },
     project: { title: "New project", placeholder: "Project name" },
-    environment: { title: "New environment", placeholder: "Environment name" },
+    environment: { title: "New environment", placeholder: "Environment name (e.g. production)" },
   };
 
   // ---------------------------------------------------------------------------
@@ -518,16 +799,40 @@ export function DashboardClient() {
               </>
             )}
             {!loadingEnvironments && environments.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No environments</span>}
-            {environments.map((e) => (
-              <button key={e.id} className={`sidebar-item${e.id === selectedEnvironmentId ? " active" : ""}`} onClick={() => setSelectedEnvironmentId(e.id)}>
-                <IconLayers size={14} /><span>{e.name}</span>
-                {e.id === selectedEnvironmentId && (
-                  <span style={{ marginLeft: "auto" }}>
-                    {isEnvUnlocked ? <IconUnlock size={12} /> : <IconLock size={12} />}
-                  </span>
-                )}
-              </button>
-            ))}
+            {environments.map((e) => {
+              const meta = environmentsMeta.find((m) => m.environment.id === e.id);
+              const isSelected = e.id === selectedEnvironmentId;
+              return (
+                <div key={e.id}>
+                  <button className={`sidebar-item${isSelected ? " active" : ""}`} onClick={() => setSelectedEnvironmentId(e.id)}>
+                    <IconLayers size={14} />
+                    <span style={{ flex: 1, textAlign: "left" }}>{e.name}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+                      {meta?.latestRevisionTimestamp && (
+                        <span className="muted" style={{ fontSize: 11 }}>{formatRelativeTime(meta.latestRevisionTimestamp)}</span>
+                      )}
+                      {isSelected && (isEnvUnlocked ? <IconUnlock size={12} /> : <IconLock size={12} />)}
+                    </span>
+                  </button>
+                  {/* File list under selected environment */}
+                  {isSelected && secretSets.length > 0 && (
+                    <div style={{ paddingLeft: 20 }}>
+                      {secretSets.map((ss) => (
+                        <button
+                          key={ss.id}
+                          className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""}`}
+                          style={{ fontSize: 13, padding: "4px 12px" }}
+                          onClick={() => setSelectedSecretSetId(ss.id)}
+                        >
+                          <IconFile size={12} />
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{ss.filePath || ".env"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -560,6 +865,7 @@ export function DashboardClient() {
                 <span>{selectedWorkspace.name}</span>
                 {selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
                 {selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
+                {selectedSecretSet && <><IconChevron size={12} /><span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{selectedSecretSet.filePath || ".env"}</span></>}
               </>
             )}
             {!selectedWorkspace && !loadingWorkspaces && <span className="muted">Select a workspace to begin</span>}
@@ -572,7 +878,7 @@ export function DashboardClient() {
                 <span className="tag" style={{ cursor: "pointer" }} onClick={handleLockEnv}><IconUnlock size={12} /> Unlocked</span>
               </>
             )}
-            {!isEnvUnlocked && selectedEnvironment && secretSet && (
+            {!isEnvUnlocked && selectedEnvironment && secretSets.length > 0 && (
               <span className="tag locked"><IconLock size={12} /> Locked</span>
             )}
           </div>
@@ -668,7 +974,7 @@ export function DashboardClient() {
         )}
 
         {/* Environment selected but locked */}
-        {!loadingSecrets && selectedEnvironmentId && secretSet && !isEnvUnlocked && (
+        {!loadingSecrets && selectedEnvironmentId && secretSets.length > 0 && !isEnvUnlocked && (
           <div className="lock-screen fade-in">
             <div className="lock-icon"><IconLock size={32} /></div>
             <h2 style={{ marginBottom: 8 }}>Enter environment password</h2>
@@ -704,8 +1010,8 @@ export function DashboardClient() {
           </div>
         )}
 
-        {/* Environment selected, no secret set (edge case — only after loading) */}
-        {!loadingSecrets && selectedEnvironmentId && !secretSet && (
+        {/* Environment selected, no secret sets (edge case — only after loading) */}
+        {!loadingSecrets && selectedEnvironmentId && secretSets.length === 0 && (
           <div className="empty-state fade-in">
             <IconShield size={40} />
             <h3 style={{ margin: "12px 0 4px" }}>No secret set</h3>
@@ -714,7 +1020,7 @@ export function DashboardClient() {
         )}
 
         {/* UNLOCKED — Key-value editor */}
-        {!loadingSecrets && selectedEnvironmentId && secretSet && isEnvUnlocked && (
+        {!loadingSecrets && selectedEnvironmentId && selectedSecretSet && isEnvUnlocked && (
           <div className="fade-in" style={{ padding: 24 }}>
             <div className="env-editor panel">
               <div className="env-editor-header">
@@ -754,20 +1060,59 @@ export function DashboardClient() {
               <div style={{ marginTop: 24 }}>
                 <strong style={{ fontSize: 15, display: "block", marginBottom: 12 }}>Revision history</strong>
                 <div className="revision-list">
-                  {history.map((rev) => (
-                    <div key={rev.id} className={`revision-item${rev.id === latestRevision?.id ? " current" : ""}`}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <IconClock size={13} />
-                        <strong>r{rev.revision}</strong>
-                        {rev.id === latestRevision?.id && <span className="tag encrypted" style={{ fontSize: 11 }}>current</span>}
+                  {history.map((rev) => {
+                    const isCurrent = rev.id === latestRevision?.id;
+                    const isExpanded = expandedRevisionId === rev.id;
+                    return (
+                      <div key={rev.id}>
+                        <div
+                          className={`revision-item${isCurrent ? " current" : ""}`}
+                          onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }}
+                          style={!isCurrent ? { cursor: "pointer" } : undefined}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                            <IconClock size={13} />
+                            <strong>r{rev.revision}</strong>
+                            {isCurrent && <span className="tag encrypted" style={{ fontSize: 11 }}>current</span>}
+                          </div>
+                          <div className="muted" style={{ fontSize: 13, flex: 1 }}>
+                            {formatRelativeTime(rev.createdAt)}
+                            <span style={{ margin: "0 6px" }}>-</span>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{rev.contentHash.slice(0, 16)}...</span>
+                          </div>
+                          {!isCurrent && (
+                            <button
+                              className="button secondary"
+                              style={{ fontSize: 12, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}
+                              onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}
+                              disabled={isPending}
+                            >
+                              <IconRestore size={12} /> Restore
+                            </button>
+                          )}
+                        </div>
+                        {/* Expanded diff view */}
+                        {isExpanded && (
+                          <div style={{ padding: "12px 14px 16px", borderLeft: "2px solid var(--border)", marginLeft: 14, marginBottom: 4 }}>
+                            {loadingRevisionDiff && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                                <div className="loading-spinner" style={{ width: 16, height: 16 }} />
+                                <span className="muted">Decrypting revision...</span>
+                              </div>
+                            )}
+                            {!loadingRevisionDiff && expandedRevisionEntries && (
+                              <RevisionDiff
+                                oldEntries={expandedRevisionEntries}
+                                newEntries={envEntries}
+                                oldLabel={`r${rev.revision}`}
+                                newLabel={isCurrent ? "current" : `r${latestRevision?.revision ?? "?"} (current)`}
+                              />
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="muted" style={{ fontSize: 13 }}>
-                        {formatRelativeTime(rev.createdAt)}
-                        <span style={{ margin: "0 6px" }}>-</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{rev.contentHash.slice(0, 16)}...</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -825,6 +1170,33 @@ export function DashboardClient() {
                   disabled={!modalName.trim() || (modal === "environment" && !modalPassword.trim()) || isPending}
                 >
                   {isPending ? "Creating..." : "Create"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DIALOG */}
+      {confirmAction && (
+        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
+          <div className="modal panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <strong>{confirmAction.title}</strong>
+              <button className="icon-button" onClick={() => setConfirmAction(null)}><IconX size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 20px", color: "var(--fg)" }}>
+                {confirmAction.message}
+              </p>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="button secondary" onClick={() => setConfirmAction(null)}>Cancel</button>
+                <button
+                  className="button"
+                  onClick={confirmAction.onConfirm}
+                  style={confirmAction.destructive ? { background: "#c0392b", borderColor: "#c0392b" } : undefined}
+                >
+                  {confirmAction.destructive ? "Restore" : "Save"}
                 </button>
               </div>
             </div>

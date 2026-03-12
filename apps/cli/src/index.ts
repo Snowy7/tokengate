@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 
 import { randomUUID } from "node:crypto";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve, join } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import {
@@ -50,6 +50,9 @@ interface LocalProjectConfig {
   workspaceName: string;
   projectId: string;
   projectName: string;
+  /** The active environment for this checkout */
+  environmentId?: string;
+  environmentName?: string;
   mappings: Record<string, EnvFileMapping>;
 }
 
@@ -72,15 +75,44 @@ async function saveLocalConfig(config: LocalProjectConfig): Promise<void> {
   await writeFile(getLocalConfigPath(), JSON.stringify(config, null, 2) + "\n");
 }
 
+const EXCLUDED_ENV_SUFFIXES = [".example", ".sample", ".template", ".bak", ".backup"];
+const EXCLUDED_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", ".turbo", ".vercel", ".output"]);
+
+/** Recursively scan for .env files, returning paths relative to project root. */
 function scanEnvFiles(): string[] {
-  try {
-    return readdirSync(process.cwd())
-      .filter((f) => /^\.env(\..+)?$/.test(f))
-      .sort();
-  } catch {
-    return [];
+  const root = process.cwd();
+  const results: string[] = [];
+
+  function walk(dir: string) {
+    try {
+      const entries = readdirSync(dir);
+      for (const entry of entries) {
+        const fullPath = join(dir, entry);
+        try {
+          const stat = statSync(fullPath);
+          if (stat.isDirectory()) {
+            if (!EXCLUDED_DIRS.has(entry) && !entry.startsWith(".")) {
+              walk(fullPath);
+            }
+            continue;
+          }
+          if (!/^\.env(\..+)?$/.test(entry)) continue;
+          const lower = entry.toLowerCase();
+          if (EXCLUDED_ENV_SUFFIXES.some((suffix) => lower.endsWith(suffix))) continue;
+          results.push(relative(root, fullPath));
+        } catch {
+          // Skip files we can't stat
+        }
+      }
+    } catch {
+      // Skip directories we can't read
+    }
   }
+
+  walk(root);
+  return results.sort();
 }
+
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -153,8 +185,9 @@ async function handleDefault() {
     return handleInitWizard();
   }
 
+  const envLabel = local.environmentName ? ` ${pc.dim("/")} ${pc.dim(local.environmentName)}` : "";
   p.intro(
-    `${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim(local.projectName)}`
+    `${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim(local.projectName)}${envLabel}`
   );
 
   const action = await p.select({
@@ -164,7 +197,7 @@ async function handleDefault() {
       { value: "pull", label: "Pull env files from remote" },
       { value: "history", label: "View revision history" },
       { value: "status", label: "Show status" },
-      { value: "init", label: "Re-initialize / change project" }
+      { value: "init", label: "Re-initialize / switch environment" }
     ]
   });
   bail(action);
@@ -296,17 +329,15 @@ async function handleStatus() {
         "Workspace",
         `${local.workspaceName}  ${pc.dim(local.workspaceId)}`
       ],
-      ["Project", `${local.projectName}  ${pc.dim(local.projectId)}`]
+      ["Project", `${local.projectName}  ${pc.dim(local.projectId)}`],
+      ["Environment", local.environmentName ? `${local.environmentName}  ${pc.dim(local.environmentId ?? "")}` : pc.dim("not set")]
     );
 
     const mappingEntries = Object.entries(local.mappings);
     if (mappingEntries.length > 0) {
-      rows.push(["", ""], ["File mappings", ""]);
-      for (const [file, mapping] of mappingEntries) {
-        rows.push([
-          `  ${file}`,
-          `→ ${mapping.environmentName}  ${pc.dim(mapping.secretSetId.slice(0, 12) + "…")}`
-        ]);
+      rows.push(["", ""], ["Tracked files", `${mappingEntries.length} file${mappingEntries.length !== 1 ? "s" : ""}`]);
+      for (const [file] of mappingEntries) {
+        rows.push([`  ${file}`, ""]);
       }
     }
   } else {
@@ -381,10 +412,10 @@ async function handlePush() {
   const config = await requireAuth();
   const client = getClient(config);
 
-  // Scan for env files
+  // Scan for env files recursively
   const envFiles = scanEnvFiles();
   if (envFiles.length === 0) {
-    p.log.warn("No .env files found in the current directory.");
+    p.log.warn("No .env files found in the project tree.");
     process.exitCode = 1;
     return;
   }
@@ -499,13 +530,13 @@ async function handlePush() {
     }
   };
 
+  if (local.environmentName) {
+    p.log.info(`Environment: ${pc.cyan(local.environmentName)}`);
+  }
   p.log.message("");
   for (const info of fileInfos) {
-    const envName = info.mapping
-      ? pc.cyan(info.mapping.environmentName)
-      : pc.dim("—");
     p.log.message(
-      `  ${statusIcon(info.status)} ${pc.bold(info.file)}  → ${envName}  ${statusLabel(info)}`
+      `  ${statusIcon(info.status)} ${pc.bold(info.file)}  ${statusLabel(info)}`
     );
   }
   p.log.message("");
@@ -570,7 +601,7 @@ async function handlePush() {
       message: "Select files to push",
       options: pushable.map((f) => ({
         value: f,
-        label: `${f.file} → ${f.mapping!.environmentName}`,
+        label: f.file,
         hint: f.status === "synced" ? "synced" : f.status === "changed" ? "changed" : "new",
         selected: f.status !== "synced"
       }))
@@ -805,10 +836,13 @@ async function handlePull() {
     }
   };
 
+  if (local.environmentName) {
+    p.log.info(`Environment: ${pc.cyan(local.environmentName)}`);
+  }
   p.log.message("");
   for (const info of pullInfos) {
     p.log.message(
-      `  ${statusIcon(info.status)} ${pc.bold(info.file)}  ← ${pc.cyan(info.mapping.environmentName)}  ${statusLabel(info)}`
+      `  ${statusIcon(info.status)} ${pc.bold(info.file)}  ${statusLabel(info)}`
     );
   }
   p.log.message("");
@@ -845,7 +879,7 @@ async function handlePull() {
       message: "Select files to pull",
       options: pullable.map((f) => ({
         value: f,
-        label: `${f.file} ← ${f.mapping.environmentName}`,
+        label: f.file,
         hint:
           f.status === "synced"
             ? "synced"
@@ -955,7 +989,7 @@ async function handleHistory() {
     return;
   }
 
-  // If multiple mappings, let user pick which environment
+  // If multiple mappings, let user pick which file
   let mapping: EnvFileMapping;
   let fileName: string;
 
@@ -963,10 +997,11 @@ async function handleHistory() {
     [fileName, mapping] = mappingEntries[0];
   } else {
     const choice = await p.select({
-      message: "Which environment?",
+      message: "Which file?",
       options: mappingEntries.map(([file, m]) => ({
         value: file,
-        label: `${file} → ${m.environmentName}`
+        label: file,
+        hint: m.environmentName
       }))
     });
     bail(choice);
@@ -1206,7 +1241,7 @@ async function handleInitWizard() {
     }
   }
 
-  // --- Load remote environments ---
+  // --- Choose or create ONE environment for this checkout ---
   let envsList: Environment[] = [];
   if (!createdNew) {
     const es = p.spinner();
@@ -1220,115 +1255,90 @@ async function handleInitWizard() {
     );
   }
 
-  // --- Scan local env files and map them ---
+  let environment: Environment;
+
+  if (envsList.length === 0) {
+    p.log.info("No environments yet. Let's create one.");
+    environment = await createEnvironmentWithPassword(client, project.id, "development");
+  } else {
+    const envOptions: Array<{ value: Environment | "new"; label: string }> =
+      envsList.map((env) => ({ value: env, label: env.name }));
+    envOptions.push({ value: "new", label: "Create new environment" });
+
+    const envChoice = await p.select({
+      message: "Environment for this checkout",
+      options: envOptions
+    });
+    bail(envChoice);
+
+    if (envChoice === "new") {
+      environment = await createEnvironmentWithPassword(client, project.id);
+    } else {
+      environment = envChoice as Environment;
+    }
+  }
+
+  // --- Scan local env files recursively ---
   const envFiles = scanEnvFiles();
   const mappings: Record<string, EnvFileMapping> = {};
 
   if (envFiles.length > 0) {
     p.log.message("");
     p.log.info(
-      `Found ${pc.bold(String(envFiles.length))} env file${envFiles.length > 1 ? "s" : ""}: ${envFiles.map((f) => pc.cyan(f)).join(", ")}`
+      `Found ${pc.bold(String(envFiles.length))} env file${envFiles.length > 1 ? "s" : ""}:`
     );
+    for (const f of envFiles) {
+      p.log.message(`  ${pc.cyan(f)}`);
+    }
     p.log.message("");
 
-    for (const file of envFiles) {
-      const suggestedName = envFileToEnvName(file);
+    // Load existing secret sets for this environment
+    const existingSecretSets = await client.query<SecretSet[]>(
+      convexFunctions.listSecretSetsForEnvironment,
+      { environmentId: environment.id }
+    );
 
-      // Check if there's an existing environment that matches
-      const existingMatch = envsList.find(
-        (e) =>
-          e.name.toLowerCase() === suggestedName.toLowerCase() ||
-          e.slug === toSlug(suggestedName)
+    for (const file of envFiles) {
+      // Check if there's already a secret set for this file path
+      const existingMatch = existingSecretSets.find(
+        (ss) => ss.filePath === file
       );
 
       if (existingMatch) {
-        // Auto-link to matching environment
-        const secretSet = await client.query<SecretSet | null>(
-          convexFunctions.getSecretSetForEnvironment,
-          { environmentId: existingMatch.id }
+        p.log.success(
+          `  ${pc.bold(file)} → ${pc.cyan(environment.name)} (already linked)`
         );
-        if (secretSet) {
-          p.log.success(
-            `  ${pc.bold(file)} → ${pc.cyan(existingMatch.name)} (auto-linked)`
-          );
-          mappings[file] = {
-            secretSetId: secretSet.id,
-            environmentId: existingMatch.id,
-            environmentName: existingMatch.name
-          };
-          continue;
-        }
+        mappings[file] = {
+          secretSetId: existingMatch.id,
+          environmentId: environment.id,
+          environmentName: environment.name
+        };
+        continue;
       }
 
-      // Ask user what to do with this file
-      const envOptions: Array<{
-        value: Environment | "new" | "skip";
-        label: string;
-      }> = envsList.map((env) => ({ value: env, label: env.name }));
-      envOptions.push({
-        value: "new",
-        label: `Create "${suggestedName}" environment`
-      });
-      envOptions.push({ value: "skip", label: "Skip this file" });
-
-      const envChoice = await p.select({
-        message: `Link ${pc.bold(file)} to environment`,
-        options: envOptions
-      });
-      bail(envChoice);
-
-      if (envChoice === "skip") continue;
-
-      if (envChoice === "new") {
-        const env = await createEnvironmentWithPassword(
-          client,
-          project.id,
-          suggestedName
-        );
-        const secretSet = await client.query<SecretSet | null>(
-          convexFunctions.getSecretSetForEnvironment,
-          { environmentId: env.id }
-        );
-        if (secretSet) {
-          mappings[file] = {
-            secretSetId: secretSet.id,
-            environmentId: env.id,
-            environmentName: env.name
-          };
-          envsList.push(env);
+      // Create a new secret set for this file within the environment
+      const fs = p.spinner();
+      fs.start(`Linking ${pc.dim(file)}`);
+      const secretSetId = await client.mutation<string>(
+        convexFunctions.addSecretSet,
+        {
+          environmentId: environment.id,
+          filePath: file
         }
-      } else {
-        const env = envChoice as Environment;
-        const secretSet = await client.query<SecretSet | null>(
-          convexFunctions.getSecretSetForEnvironment,
-          { environmentId: env.id }
-        );
-        if (secretSet) {
-          mappings[file] = {
-            secretSetId: secretSet.id,
-            environmentId: env.id,
-            environmentName: env.name
-          };
-        }
-      }
+      );
+      fs.stop(`  ${pc.bold(file)} → ${pc.cyan(environment.name)} (linked)`);
+
+      mappings[file] = {
+        secretSetId,
+        environmentId: environment.id,
+        environmentName: environment.name
+      };
     }
   }
 
-  // If no env files found, create at least one environment
-  if (envFiles.length === 0 || Object.keys(mappings).length === 0) {
-    p.log.info("No .env files found. Let's create an environment anyway.");
-    const env = await createEnvironmentWithPassword(client, project.id);
-    const secretSet = await client.query<SecretSet | null>(
-      convexFunctions.getSecretSetForEnvironment,
-      { environmentId: env.id }
-    );
-    if (secretSet) {
-      mappings[".env"] = {
-        secretSetId: secretSet.id,
-        environmentId: env.id,
-        environmentName: env.name
-      };
-    }
+  // If no env files found, ensure the environment exists at least
+  if (envFiles.length === 0) {
+    p.log.info("No .env files found in the project tree.");
   }
 
   // Save local config
@@ -1337,6 +1347,8 @@ async function handleInitWizard() {
     workspaceName: workspace.name,
     projectId: project.id,
     projectName: project.name,
+    environmentId: environment.id,
+    environmentName: environment.name,
     mappings
   };
   await saveLocalConfig(localConfig);
@@ -1349,12 +1361,13 @@ async function handleInitWizard() {
 
   // Summary
   const lines = [
-    `${pc.dim("Workspace")}  ${workspace.name}`,
-    `${pc.dim("Project")}    ${project.name}`,
+    `${pc.dim("Workspace")}     ${workspace.name}`,
+    `${pc.dim("Project")}       ${project.name}`,
+    `${pc.dim("Environment")}   ${environment.name}`,
     ""
   ];
-  for (const [file, m] of Object.entries(mappings)) {
-    lines.push(`  ${pc.bold(file)}  → ${pc.cyan(m.environmentName)}`);
+  for (const [file] of Object.entries(mappings)) {
+    lines.push(`  ${pc.bold(file)}`);
   }
   lines.push("", `Saved to ${pc.cyan(LOCAL_CONFIG_FILE)}`);
   p.note(lines.join("\n"), "Configuration");
@@ -1392,79 +1405,47 @@ async function handleInitWizard() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Link a local file to a remote environment during push. */
+/** Add a new file to the current environment during push. */
 async function linkFileToEnvironment(
   client: TokengateConvexClient,
   local: LocalProjectConfig,
   file: string
 ): Promise<EnvFileMapping | null> {
-  const suggestedName = envFileToEnvName(file);
-
-  // Fetch environments for the project
-  const environments = await client.query<Environment[]>(
-    convexFunctions.listEnvironments,
-    { projectId: local.projectId }
-  );
-
-  const options: Array<{
-    value: Environment | "new" | "skip";
-    label: string;
-  }> = environments.map((env) => ({ value: env, label: env.name }));
-  options.push({
-    value: "new",
-    label: `Create "${suggestedName}" environment`
-  });
-  options.push({ value: "skip", label: "Skip this file" });
-
-  const choice = await p.select({
-    message: `Link ${pc.bold(file)} to environment`,
-    options
-  });
-  bail(choice);
-
-  if (choice === "skip") return null;
-
-  if (choice === "new") {
-    const env = await createEnvironmentWithPassword(
-      client,
-      local.projectId,
-      suggestedName
-    );
-    const secretSet = await client.query<SecretSet | null>(
-      convexFunctions.getSecretSetForEnvironment,
-      { environmentId: env.id }
-    );
-    if (!secretSet) return null;
-
-    const mapping: EnvFileMapping = {
-      secretSetId: secretSet.id,
-      environmentId: env.id,
-      environmentName: env.name
-    };
-    local.mappings[file] = mapping;
-    return mapping;
+  if (!local.environmentId || !local.environmentName) {
+    p.log.error("No environment set. Run tokengate init first.");
+    return null;
   }
 
-  const env = choice as Environment;
-  const secretSet = await client.query<SecretSet | null>(
-    convexFunctions.getSecretSetForEnvironment,
-    { environmentId: env.id }
+  const addIt = await p.confirm({
+    message: `Add ${pc.bold(file)} to ${pc.cyan(local.environmentName)}?`,
+    initialValue: true
+  });
+  bail(addIt);
+  if (!addIt) return null;
+
+  const secretSetId = await client.mutation<string>(
+    convexFunctions.addSecretSet,
+    {
+      environmentId: local.environmentId,
+      filePath: file
+    }
   );
-  if (!secretSet) return null;
 
   const mapping: EnvFileMapping = {
-    secretSetId: secretSet.id,
-    environmentId: env.id,
-    environmentName: env.name
+    secretSetId,
+    environmentId: local.environmentId,
+    environmentName: local.environmentName
   };
   local.mappings[file] = mapping;
   return mapping;
 }
 
-/** Derive a human-readable environment name from a .env filename. */
+/** Derive a human-readable environment name from a .env file path. */
 function envFileToEnvName(file: string): string {
+  // Extract just the basename: apps/web/.env.production → .env.production
+  const basename = file.split("/").pop() ?? file;
   // .env → development, .env.local → local, .env.production → production
-  const match = file.match(/^\.env\.(.+)$/);
+  const match = basename.match(/^\.env\.(.+)$/);
   if (match) return match[1];
   return "development";
 }
@@ -1701,10 +1682,15 @@ function printHelp() {
 
   ${pc.bold("How it works")}
     1. Run ${pc.cyan("tokengate init")} in your project root
-    2. It scans for .env files and links each to an environment
-    3. Each environment is locked with its own password
-    4. ${pc.cyan("tokengate push")} / ${pc.cyan("tokengate pull")} shows all files with sync status
-    5. Config is saved to ${pc.cyan(LOCAL_CONFIG_FILE)}
+    2. Choose an environment (e.g. development, production)
+    3. All .env files in the project tree are scanned and linked
+    4. One password per environment encrypts all files within it
+    5. ${pc.cyan("tokengate push")} / ${pc.cyan("tokengate pull")} syncs files with full paths
+
+  ${pc.bold("File scanning")}
+    Recursively finds .env files across the project tree.
+    Skips: .env.example, .env.sample, .env.template, .env.bak
+    Paths shown relative to project root (e.g. apps/web/.env.local)
 
   ${pc.bold("Environment variables")}
     ${pc.dim("TOKENGATE_APP_URL")}   Override app URL (default: https://tokengate.dev)

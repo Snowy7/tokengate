@@ -107,7 +107,8 @@ export const createEnvironment = mutation({
     projectId: v.id("projects"),
     name: v.string(),
     slug: v.string(),
-    keySalt: v.string()
+    keySalt: v.string(),
+    filePath: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -125,6 +126,7 @@ export const createEnvironment = mutation({
 
     await ctx.db.insert("secretSets", {
       environmentId,
+      filePath: args.filePath,
       keySalt: args.keySalt,
       createdAt: Date.now()
     });
@@ -137,6 +139,153 @@ export const createEnvironment = mutation({
     });
 
     return environmentId;
+  }
+});
+
+export const updateEnvironment = mutation({
+  args: {
+    environmentId: v.id("environments"),
+    name: v.optional(v.string()),
+    slug: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const environment = await ctx.db.get(args.environmentId);
+    if (!environment) {
+      throw new Error("Environment not found");
+    }
+
+    const project = await ctx.db.get(environment.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member"]);
+
+    const patch: Record<string, string> = {};
+    if (args.name !== undefined) patch.name = args.name;
+    if (args.slug !== undefined) patch.slug = args.slug;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.environmentId, patch);
+    }
+  }
+});
+
+export const addSecretSet = mutation({
+  args: {
+    environmentId: v.id("environments"),
+    filePath: v.string(),
+    keySalt: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const environment = await ctx.db.get(args.environmentId);
+    if (!environment) {
+      throw new Error("Environment not found");
+    }
+
+    const project = await ctx.db.get(environment.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member"]);
+
+    // If no keySalt provided, copy from an existing secretSet in this environment
+    let keySalt = args.keySalt;
+    if (!keySalt) {
+      const existing = await ctx.db.query("secretSets")
+        .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+        .first();
+      if (!existing) {
+        throw new Error("No existing secret set found to inherit keySalt from. Provide keySalt explicitly.");
+      }
+      keySalt = existing.keySalt;
+    }
+
+    const secretSetId = await ctx.db.insert("secretSets", {
+      environmentId: args.environmentId,
+      filePath: args.filePath,
+      keySalt,
+      createdAt: Date.now()
+    });
+
+    return secretSetId;
+  }
+});
+
+export const listSecretSetsForEnvironment = query({
+  args: {
+    environmentId: v.id("environments")
+  },
+  handler: async (ctx, args) => {
+    const environment = await ctx.db.get(args.environmentId);
+    if (!environment) {
+      throw new Error("Environment not found");
+    }
+
+    const project = await ctx.db.get(environment.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member", "viewer"]);
+    return ctx.db.query("secretSets")
+      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+      .collect();
+  }
+});
+
+export const listEnvironmentsWithMeta = query({
+  args: {
+    projectId: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member", "viewer"]);
+    const environments = await ctx.db.query("environments").withIndex("by_project", (query) => query.eq("projectId", args.projectId)).collect();
+
+    return Promise.all(
+      environments.map(async (env) => {
+        const secretSets = await ctx.db.query("secretSets").withIndex("by_environment", (query) => query.eq("environmentId", env._id)).collect();
+
+        let latestRevisionTimestamp: number | null = null;
+        const files: Array<{ secretSetId: string; filePath: string | null; latestRevision: number | null }> = [];
+
+        for (const ss of secretSets) {
+          let revTimestamp: number | null = null;
+          if (ss.latestRevision) {
+            const rev = await ctx.db
+              .query("secretRevisions")
+              .withIndex("by_secret_set_and_revision", (query) =>
+                query.eq("secretSetId", ss._id).eq("revision", ss.latestRevision!)
+              )
+              .unique();
+            if (rev) {
+              revTimestamp = rev.createdAt;
+              if (!latestRevisionTimestamp || rev.createdAt > latestRevisionTimestamp) {
+                latestRevisionTimestamp = rev.createdAt;
+              }
+            }
+          }
+          files.push({
+            secretSetId: ss._id,
+            filePath: ss.filePath ?? null,
+            latestRevision: ss.latestRevision ?? null
+          });
+        }
+
+        return {
+          environment: env,
+          fileCount: secretSets.length,
+          files,
+          latestRevisionTimestamp
+        };
+      })
+    );
   }
 });
 

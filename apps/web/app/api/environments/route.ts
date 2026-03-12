@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       name?: string;
       slug?: string;
       keySalt?: string;
+      filePath?: string;
     };
 
     if (!body.projectId || !body.name || !body.slug || !body.keySalt) {
@@ -38,7 +39,8 @@ export async function POST(request: NextRequest) {
       projectId: body.projectId,
       name: body.name,
       slug: body.slug,
-      keySalt: body.keySalt
+      keySalt: body.keySalt,
+      filePath: body.filePath
     });
     return NextResponse.json({ environmentId });
   } catch (error) {

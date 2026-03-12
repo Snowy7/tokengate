@@ -44,6 +44,7 @@ export interface Environment {
 export interface SecretSet {
   id: string;
   environmentId: string;
+  filePath?: string;
   keySalt: string;
   latestRevision?: number;
   createdAt: number;
@@ -90,7 +91,8 @@ export interface AuditEvent {
     | "environment.created"
     | "revision.created"
     | "device.registered"
-    | "device.revoked";
+    | "device.revoked"
+    | "revision.restored";
   subjectId: string;
   metadata?: Record<string, string | number | boolean | null>;
   createdAt: number;
@@ -179,6 +181,11 @@ export const convexFunctions = {
   createRevision: "revisions:createRevision",
   getLatestRevision: "revisions:getLatestRevision",
   listRevisionHistory: "revisions:listRevisionHistory",
+  updateEnvironment: "workspaces:updateEnvironment",
+  listEnvironmentsWithMeta: "workspaces:listEnvironmentsWithMeta",
+  addSecretSet: "workspaces:addSecretSet",
+  listSecretSetsForEnvironment: "workspaces:listSecretSetsForEnvironment",
+  restoreRevision: "revisions:restoreRevision",
   registerDevice: "devices:registerDevice",
   listDevices: "devices:listDevices",
   revokeDevice: "devices:revokeDevice"

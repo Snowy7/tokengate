@@ -1,6 +1,6 @@
 {
   "name": "@tokengate/cli",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "End-to-end encrypted environment variable sync",
   "type": "module",
   "bin": {
