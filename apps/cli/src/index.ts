@@ -436,11 +436,17 @@ async function handlePush() {
 
   const fileInfos: FileInfo[] = [];
 
+  // Build a normalized lookup for mappings (handles path separator mismatches)
+  const normalizedMappings = new Map<string, EnvFileMapping>();
+  for (const [key, val] of Object.entries(local.mappings)) {
+    normalizedMappings.set(key.replace(/\\/g, "/"), val);
+  }
+
   for (const file of envFiles) {
     const content = await readFile(resolve(process.cwd(), file), "utf8");
     const normalized = normalizeEnvDocument(content);
     const localHash = await hashContent(normalized);
-    const mapping = local.mappings[file];
+    const mapping = normalizedMappings.get(file);
 
     if (!mapping) {
       fileInfos.push({
