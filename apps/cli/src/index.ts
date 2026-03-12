@@ -215,9 +215,9 @@ async function handleLogin(argv: string[]) {
     fetch: async (request) => {
       const url = new URL(request.url);
       if (url.pathname !== "/callback")
-        return new Response("Not found", { status: 404 });
+        return htmlResponse("Not Found", "This page doesn't exist.", true, 404);
       if (url.searchParams.get("state") !== state)
-        return new Response("State mismatch", { status: 400 });
+        return htmlResponse("State Mismatch", "The login session has expired or is invalid. Run tokengate login again.", true, 400);
 
       const token = url.searchParams.get("token");
       const deviceId = url.searchParams.get("device_id");
@@ -227,14 +227,12 @@ async function handleLogin(argv: string[]) {
       if (error) {
         server.stop();
         rejectLogin(new Error(error));
-        return new Response("Login failed. Return to your terminal.", {
-          status: 400
-        });
+        return htmlResponse("Login Failed", error, true, 400);
       }
 
       if (!token || !deviceId) {
         rejectLogin(new Error("Missing device token or device id."));
-        return new Response("Missing credentials.", { status: 400 });
+        return htmlResponse("Missing Credentials", "The server did not return the required credentials.", true, 400);
       }
 
       await saveConfig({
@@ -249,7 +247,7 @@ async function handleLogin(argv: string[]) {
 
       server.stop();
       resolveLogin();
-      return new Response("Login complete. Return to your terminal.");
+      return htmlResponse("Authenticated", `Device ${label} has been authorized. You can close this tab.`, false, 200);
     }
   });
 
@@ -1624,6 +1622,44 @@ function isCancel(error: unknown): boolean {
   return (
     typeof error === "object" && error !== null && "__cancel" in error
   );
+}
+
+function htmlResponse(title: string, message: string, isError: boolean, status: number) {
+  const accent = isError ? "#e74c3c" : "#00d68f";
+  const icon = isError
+    ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`
+    : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} — Tokengate</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;600;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; border-radius: 0 !important; }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0a0a0a; color: #e0e0e0; font-family: 'Work Sans', sans-serif; padding: 24px; }
+  .card { width: 100%; max-width: 440px; border: 3px solid #333; background: #111; padding: 40px 32px; }
+  .badge { font-family: 'Space Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: ${accent}; font-weight: 700; margin-bottom: 20px; }
+  .icon { margin-bottom: 16px; }
+  h1 { font-family: 'Work Sans', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 12px; color: #fff; }
+  .msg { font-size: 14px; line-height: 1.6; color: #888; margin-bottom: 24px; }
+  .footer { padding-top: 16px; border-top: 2px solid #222; font-family: 'Space Mono', monospace; font-size: 11px; color: #444; letter-spacing: 0.05em; }
+  .hint { font-family: 'Space Mono', monospace; font-size: 12px; color: #555; background: #0d0d0d; border: 2px solid #222; padding: 10px 14px; margin-bottom: 24px; }
+  .hint code { color: ${accent}; }
+</style></head><body>
+<div class="card">
+  <div class="badge">tokengate cli</div>
+  <div class="icon">${icon}</div>
+  <h1>${title}</h1>
+  <p class="msg">${message}</p>
+  ${isError ? `<div class="hint">Run <code>tokengate login</code> to try again.</div>` : `<div class="hint">You can close this tab and return to your terminal.</div>`}
+  <div class="footer">tokengate.dev — end-to-end encrypted env sync</div>
+</div>
+</body></html>`;
+
+  return new Response(html, {
+    status,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 }
 
 async function openInBrowser(url: string) {

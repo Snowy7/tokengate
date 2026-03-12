@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 function CliAuthContent() {
   const params = useSearchParams();
   const [approved, setApproved] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const callbackUrl = params.get("callback");
   const state = params.get("state");
@@ -25,146 +24,201 @@ function CliAuthContent() {
     return `/api/cli/device-flow/approve?${search.toString()}`;
   }, [callbackUrl, deviceName, params, state]);
 
+  const hasParams = approvalHref !== null;
+
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "24px",
-      background: "var(--background)",
-    }}>
-      <div style={{
-        width: "100%",
-        maxWidth: 480,
-        border: "3px solid var(--border)",
-        background: "var(--surface)",
-        padding: "40px 32px",
-      }}>
-        {/* Terminal-style header */}
-        <div style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.15em",
-          color: "var(--accent)",
-          fontWeight: 700,
-          marginBottom: 8,
-        }}>
-          CLI Authorization
+    <div className="cli-auth-page">
+      <style>{`
+        .cli-auth-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          background: var(--background);
+        }
+        .cli-auth-card {
+          width: 100%;
+          max-width: 460px;
+          border: 3px solid var(--border);
+          background: var(--surface);
+        }
+        .cli-auth-header {
+          padding: 20px 28px;
+          border-bottom: 3px solid var(--border);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .cli-auth-header svg { color: var(--accent); }
+        .cli-auth-header span {
+          font-family: var(--font-mono);
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          color: var(--muted);
+        }
+        .cli-auth-body { padding: 32px 28px; }
+        .cli-auth-body h1 {
+          font-size: 22px;
+          font-weight: 800;
+          margin: 0 0 20px;
+          color: var(--text);
+          font-family: var(--font-heading);
+          line-height: 1.2;
+        }
+        .cli-auth-device {
+          font-family: var(--font-mono);
+          font-size: 13px;
+          padding: 14px 16px;
+          background: var(--surface-hover);
+          border: 2px solid var(--border);
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .cli-auth-device .prompt { color: var(--accent); font-weight: 700; }
+        .cli-auth-device .label { color: var(--muted); }
+        .cli-auth-device .name { color: var(--text); font-weight: 700; }
+        .cli-auth-desc {
+          font-size: 14px;
+          line-height: 1.7;
+          color: var(--muted);
+          margin: 0 0 24px;
+        }
+        .cli-auth-approve {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          padding: 16px 24px;
+          font-family: var(--font-mono);
+          font-size: 14px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--accent-fg);
+          background: var(--accent);
+          border: 3px solid var(--text);
+          text-decoration: none;
+          cursor: pointer;
+          transition: box-shadow 120ms ease, transform 120ms ease;
+        }
+        .cli-auth-approve:hover {
+          box-shadow: 4px 4px 0 var(--text);
+          transform: translate(-2px, -2px);
+        }
+        .cli-auth-approve.disabled {
+          opacity: 0.5;
+          pointer-events: none;
+        }
+        .cli-auth-status {
+          margin-top: 20px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-family: var(--font-mono);
+          font-size: 13px;
+          color: var(--accent);
+          padding: 12px 16px;
+          border: 2px solid var(--accent);
+          background: color-mix(in srgb, var(--accent) 5%, transparent);
+        }
+        .cli-auth-error {
+          padding: 24px;
+          border: 2px solid var(--border);
+          background: var(--surface-hover);
+          text-align: center;
+        }
+        .cli-auth-error svg {
+          margin-bottom: 12px;
+          color: var(--muted);
+          opacity: 0.5;
+        }
+        .cli-auth-error p {
+          font-size: 14px;
+          color: var(--muted);
+          line-height: 1.6;
+          margin: 0 0 16px;
+        }
+        .cli-auth-error code {
+          font-family: var(--font-mono);
+          color: var(--accent);
+          font-size: 13px;
+        }
+        .cli-auth-footer {
+          padding: 16px 28px;
+          border-top: 2px solid var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--muted);
+          letter-spacing: 0.04em;
+        }
+      `}</style>
+
+      <div className="cli-auth-card">
+        {/* Header bar */}
+        <div className="cli-auth-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
+          <span>CLI Authorization</span>
         </div>
 
-        <h1 style={{
-          fontSize: 24,
-          fontWeight: 800,
-          margin: "0 0 16px",
-          color: "var(--text)",
-          fontFamily: "var(--font-heading)",
-        }}>
-          Authorize {deviceName ?? "your device"}
-        </h1>
+        <div className="cli-auth-body">
+          {hasParams ? (
+            <>
+              <h1>Authorize device</h1>
 
-        {/* Device info */}
-        {deviceName && (
-          <div style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            padding: "12px 16px",
-            background: "var(--surface-hover)",
-            border: "2px solid var(--border)",
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}>
-            <span style={{ color: "var(--accent)" }}>$</span>
-            <span style={{ color: "var(--muted)" }}>device:</span>
-            <span style={{ color: "var(--text)" }}>{deviceName}</span>
-          </div>
-        )}
+              {/* Device terminal block */}
+              <div className="cli-auth-device">
+                <span className="prompt">$</span>
+                <span className="label">device</span>
+                <span className="name">{deviceName ?? "tokengate-cli"}</span>
+              </div>
 
-        <p style={{
-          lineHeight: 1.6,
-          color: "var(--muted)",
-          fontSize: 14,
-          margin: "0 0 24px",
-        }}>
-          This will register the device&apos;s public key and return an access token to the CLI.
-        </p>
+              <p className="cli-auth-desc">
+                This will register the device and return an encrypted access token to the CLI running on your machine.
+              </p>
 
-        {approvalHref && !approved ? (
-          <a
-            href={approvalHref}
-            onClick={() => { setApproved(true); setLoading(true); }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              width: "100%",
-              padding: "14px 24px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 14,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: "var(--accent-fg)",
-              background: "var(--accent)",
-              border: "3px solid var(--text)",
-              textDecoration: "none",
-              cursor: "pointer",
-              transition: "box-shadow 120ms ease, transform 120ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = "4px 4px 0 var(--text)";
-              e.currentTarget.style.transform = "translate(-2px, -2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = "none";
-              e.currentTarget.style.transform = "none";
-            }}
-          >
-            Approve device
-          </a>
-        ) : approvalHref === null ? (
-          <div style={{
-            padding: "14px 20px",
-            border: "2px solid var(--border)",
-            background: "var(--surface-hover)",
-            color: "var(--muted)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            textAlign: "center",
-          }}>
-            Missing callback parameters. Run <code style={{ color: "var(--accent)" }}>tokengate login</code> again.
-          </div>
-        ) : null}
+              {!approved ? (
+                <a href={approvalHref!} className="cli-auth-approve" onClick={() => setApproved(true)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  Approve &amp; authorize
+                </a>
+              ) : (
+                <div className="cli-auth-approve disabled">Approved</div>
+              )}
 
-        {loading && (
-          <div style={{
-            marginTop: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            color: "var(--accent)",
-          }}>
-            <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
-            Redirecting to CLI...
-          </div>
-        )}
+              {approved && (
+                <div className="cli-auth-status">
+                  <div className="loading-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                  Redirecting to CLI callback...
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="cli-auth-error">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <p>Missing callback parameters. The login link may have expired or been truncated.</p>
+              <p>Run <code>tokengate login</code> in your terminal to try again.</p>
+            </div>
+          )}
+        </div>
 
-        <div style={{
-          marginTop: 24,
-          paddingTop: 16,
-          borderTop: "2px solid var(--border)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--muted)",
-          letterSpacing: "0.05em",
-        }}>
-          tokengate.dev — end-to-end encrypted env sync
+        <div className="cli-auth-footer">
+          <span>tokengate.dev</span>
+          <span>e2e encrypted</span>
         </div>
       </div>
     </div>
