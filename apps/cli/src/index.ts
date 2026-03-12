@@ -99,7 +99,7 @@ function scanEnvFiles(): string[] {
           if (!/^\.env(\..+)?$/.test(entry)) continue;
           const lower = entry.toLowerCase();
           if (EXCLUDED_ENV_SUFFIXES.some((suffix) => lower.endsWith(suffix))) continue;
-          results.push(relative(root, fullPath));
+          results.push(relative(root, fullPath).replace(/\\/g, "/"));
         } catch {
           // Skip files we can't stat
         }
@@ -735,7 +735,8 @@ async function handlePull() {
 
     // Build mappings from remote secret sets
     for (const ss of remoteSets) {
-      const filePath = ss.filePath || ".env";
+      // Normalize path separators (remote may store Windows backslashes)
+      const filePath = (ss.filePath || ".env").replace(/\\/g, "/");
       local.mappings[filePath] = {
         secretSetId: ss.id,
         environmentId: local.environmentId,
@@ -770,7 +771,8 @@ async function handlePull() {
 
   const pullInfos: PullInfo[] = [];
 
-  for (const [file, mapping] of mappingEntries) {
+  for (const [rawFile, mapping] of mappingEntries) {
+    const file = rawFile.replace(/\\/g, "/");
     const filePath = resolve(process.cwd(), file);
     const localExists = existsSync(filePath);
     let localHash: string | undefined;
