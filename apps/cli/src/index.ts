@@ -709,17 +709,51 @@ async function handlePull() {
     return;
   }
 
-  const mappingEntries = Object.entries(local.mappings);
-  if (mappingEntries.length === 0) {
+  const config = await requireAuth();
+  const client = getClient(config);
+
+  let mappingEntries = Object.entries(local.mappings);
+
+  // Auto-discover remote files when no local mappings exist
+  if (mappingEntries.length === 0 && local.environmentId) {
+    const discoverSpin = p.spinner();
+    discoverSpin.start("Discovering remote files");
+
+    const remoteSets = await client.query<SecretSet[]>(
+      convexFunctions.listSecretSetsForEnvironment,
+      { environmentId: local.environmentId }
+    );
+
+    if (remoteSets.length === 0) {
+      discoverSpin.stop("No remote files found.");
+      p.log.warn(
+        `No files in this environment yet. Run ${pc.cyan("tokengate push")} to upload.`
+      );
+      p.outro("Done");
+      return;
+    }
+
+    // Build mappings from remote secret sets
+    for (const ss of remoteSets) {
+      const filePath = ss.filePath || ".env";
+      local.mappings[filePath] = {
+        secretSetId: ss.id,
+        environmentId: local.environmentId,
+        environmentName: local.environmentName || "unknown"
+      };
+    }
+    await saveLocalConfig(local);
+    mappingEntries = Object.entries(local.mappings);
+    discoverSpin.stop(
+      `Found ${pc.bold(String(remoteSets.length))} remote file${remoteSets.length > 1 ? "s" : ""}.`
+    );
+  } else if (mappingEntries.length === 0) {
     p.log.warn(
       `No file mappings in ${LOCAL_CONFIG_FILE}. Run ${pc.cyan("tokengate init")} to set up.`
     );
     process.exitCode = 1;
     return;
   }
-
-  const config = await requireAuth();
-  const client = getClient(config);
 
   // Check remote status for each mapped file
   const spinner = p.spinner();
