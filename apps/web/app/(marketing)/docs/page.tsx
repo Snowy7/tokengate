@@ -152,7 +152,6 @@ export default function DocsPage() {
   color: var(--docs-text);
   font-family: var(--docs-font-sans);
   min-height: 100vh;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -341,6 +340,7 @@ export default function DocsPage() {
   min-width: 0;
   padding: 48px 48px 96px;
   max-width: 860px;
+  overflow-x: hidden;
 }
 
 /* ========== SECTIONS ========== */
