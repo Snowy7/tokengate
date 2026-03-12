@@ -613,13 +613,37 @@ export function DashboardClient() {
         {/* No workspaces — only show after loading completes */}
         {!loadingWorkspaces && workspaces.length === 0 && (
           <div className="empty-state fade-in">
-            <IconShield size={48} />
-            <h2 style={{ margin: "16px 0 8px", fontSize: 22 }}>Welcome to Tokengate</h2>
-            <p className="muted" style={{ maxWidth: 420, lineHeight: 1.6, margin: "0 auto 24px" }}>
-              End-to-end encrypted environment variables. Each environment is locked with its own password that never leaves your browser.
+            <div style={{
+              width: 72,
+              height: 72,
+              border: "3px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 24,
+            }}>
+              <IconShield size={32} />
+            </div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontFamily: "var(--font-heading)", fontWeight: 800 }}>No workspaces yet</h2>
+            <p className="muted" style={{ maxWidth: 380, lineHeight: 1.6, margin: "0 auto 28px", fontSize: 14 }}>
+              Create a workspace to start syncing encrypted environment variables across your team.
             </p>
-            <button className="button" onClick={() => { setModal("workspace"); setModalName(""); }}>
-              <IconPlus size={14} /> Create your first workspace
+            <button
+              className="button"
+              onClick={() => { setModal("workspace"); setModalName(""); }}
+              style={{
+                padding: "14px 28px",
+                fontSize: 14,
+                fontFamily: "var(--font-mono)",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <IconPlus size={14} /> New workspace
             </button>
           </div>
         )}
@@ -627,9 +651,19 @@ export function DashboardClient() {
         {/* No environment selected */}
         {!loadingWorkspaces && !loadingProjects && !loadingEnvironments && workspaces.length > 0 && !selectedEnvironmentId && (
           <div className="empty-state fade-in">
-            <IconLayers size={40} />
-            <h3 style={{ margin: "12px 0 4px" }}>No environment selected</h3>
-            <p className="muted">Select or create an environment from the sidebar.</p>
+            <div style={{
+              width: 56,
+              height: 56,
+              border: "3px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 20,
+            }}>
+              <IconLayers size={24} />
+            </div>
+            <h3 style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 17 }}>No environment selected</h3>
+            <p className="muted" style={{ fontSize: 13 }}>Select or create an environment from the sidebar.</p>
           </div>
         )}
 
