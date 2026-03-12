@@ -80,6 +80,21 @@ export default defineSchema({
     createdBy: v.string()
   }).index("by_workspace_and_target", ["workspaceId", "targetId"]),
 
+  invites: defineTable({
+    workspaceId: v.id("workspaces"),
+    email: v.string(),
+    role: v.union(v.literal("admin"), v.literal("member"), v.literal("viewer")),
+    token: v.string(),
+    invitedBy: v.string(),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("expired")),
+    createdAt: v.number(),
+    expiresAt: v.number()
+  })
+    .index("by_token", ["token"])
+    .index("by_workspace", ["workspaceId"])
+    .index("by_email", ["email"])
+    .index("by_workspace_and_email", ["workspaceId", "email"]),
+
   auditEvents: defineTable({
     workspaceId: v.id("workspaces"),
     actorId: v.string(),

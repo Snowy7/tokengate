@@ -19,6 +19,9 @@ import {
 import type { EnvEntry } from "@tokengate/env-format";
 import type {
   Environment,
+  Invite,
+  InviteWithWorkspace,
+  MemberWithProfile,
   Project,
   SecretRevision,
   SecretSet,
@@ -95,6 +98,30 @@ function IconBox({ size = 16 }: { size?: number }) {
   );
 }
 
+function IconSettings({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+  );
+}
+
+function IconUsers({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
+  );
+}
+
+function IconChevronDown({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+  );
+}
+
+function IconMail({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+  );
+}
+
 function IconCopy({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
@@ -141,6 +168,22 @@ async function postJson<T>(input: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!response.ok) throw new Error(await response.text());
+  return (await response.json()) as T;
+}
+
+async function patchJson<T>(input: string, body: unknown): Promise<T> {
+  const response = await fetch(input, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return (await response.json()) as T;
+}
+
+async function deleteJson<T>(input: string): Promise<T> {
+  const response = await fetch(input, { method: "DELETE" });
   if (!response.ok) throw new Error(await response.text());
   return (await response.json()) as T;
 }
@@ -284,7 +327,8 @@ function RevisionDiff({ oldEntries, newEntries, oldLabel, newLabel }: {
   );
 }
 
-type ModalKind = "workspace" | "project" | "environment" | null;
+type ModalKind = "workspace" | "project" | "environment" | "invite" | null;
+type ActiveView = "secrets" | "settings";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -331,6 +375,19 @@ export function DashboardClient() {
   const [expandedRevisionEntries, setExpandedRevisionEntries] = useState<EnvEntry[] | null>(null);
   const [loadingRevisionDiff, setLoadingRevisionDiff] = useState(false);
 
+  // --- Sidebar ---
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
+  const [activeView, setActiveView] = useState<ActiveView>("secrets");
+
+  // --- Settings ---
+  const [members, setMembers] = useState<MemberWithProfile[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+
   // --- Confirmation dialog ---
   const [confirmAction, setConfirmAction] = useState<{
     title: string;
@@ -356,6 +413,13 @@ export function DashboardClient() {
     () => secretSets.find((s) => s.id === selectedSecretSetId) ?? null,
     [selectedSecretSetId, secretSets],
   );
+  const selectedMembership = useMemo(
+    () => workspaces.find((w) => w.workspace?.id === selectedWorkspaceId)?.membership ?? null,
+    [selectedWorkspaceId, workspaces],
+  );
+  const isOwner = selectedMembership?.role === "owner";
+  const isAdmin = selectedMembership?.role === "admin";
+  const isOwnerOrAdmin = isOwner || isAdmin;
   const isEnvUnlocked = derivedKey !== null;
 
   // --- Toast ---
@@ -402,6 +466,43 @@ export function DashboardClient() {
       setSelectedEnvironmentId((cur) => envRes.environments.some((x) => x.id === cur) ? cur : envRes.environments[0]?.id ?? "");
     }).finally(() => setLoadingEnvironments(false));
   }, [selectedProjectId]);
+
+  // Auto-expand the project that contains the selected environment
+  useEffect(() => {
+    if (selectedProjectId) {
+      setExpandedProjects((prev) => {
+        const next = new Set(prev);
+        next.add(selectedProjectId);
+        return next;
+      });
+    }
+  }, [selectedProjectId]);
+
+  // Load members/invites when settings view is active
+  const refreshMembers = useCallback(async () => {
+    if (!selectedWorkspaceId) return;
+    setLoadingMembers(true);
+    try {
+      const [membersRes, invitesRes] = await Promise.all([
+        fetchJson<{ members: MemberWithProfile[] }>(`/api/members?workspaceId=${selectedWorkspaceId}`),
+        isOwnerOrAdmin
+          ? fetchJson<{ invites: Invite[] }>(`/api/invites?workspaceId=${selectedWorkspaceId}`)
+          : Promise.resolve({ invites: [] as Invite[] }),
+      ]);
+      setMembers(membersRes.members);
+      setPendingInvites(invitesRes.invites);
+    } catch {
+      // User may not have permission to list invites
+    } finally {
+      setLoadingMembers(false);
+    }
+  }, [selectedWorkspaceId, isOwnerOrAdmin]);
+
+  useEffect(() => {
+    if (activeView === "settings" && selectedWorkspaceId) {
+      void refreshMembers();
+    }
+  }, [activeView, selectedWorkspaceId, refreshMembers]);
 
   // When environment changes, reset crypto state and load secret sets
   useEffect(() => {
@@ -718,6 +819,88 @@ export function DashboardClient() {
     if (modal === "workspace") handleCreateWorkspace();
     else if (modal === "project") handleCreateProject();
     else if (modal === "environment") handleCreateEnvironment();
+    else if (modal === "invite") handleCreateInvite();
+  }
+
+  function handleCreateInvite() {
+    if (!inviteEmail.trim() || !selectedWorkspaceId) return;
+    startTransition(async () => {
+      try {
+        const result = await postJson<{ inviteId: string; token: string }>("/api/invites", {
+          workspaceId: selectedWorkspaceId,
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        });
+        const link = `${window.location.origin}/invites/accept?token=${result.token}`;
+        setLastInviteLink(link);
+        setInviteEmail("");
+        pushToast("Invite created.", "success");
+        void refreshMembers();
+      } catch (err) {
+        pushToast(err instanceof Error ? err.message : "Failed.", "error");
+      }
+    });
+  }
+
+  function handleCancelInvite(inviteId: string) {
+    setConfirmAction({
+      title: "Cancel invite",
+      message: "Are you sure you want to cancel this invite?",
+      destructive: true,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            await deleteJson(`/api/invites/${inviteId}`);
+            pushToast("Invite cancelled.", "success");
+            void refreshMembers();
+          } catch (err) {
+            pushToast(err instanceof Error ? err.message : "Failed.", "error");
+          }
+        });
+      },
+    });
+  }
+
+  function handleUpdateMemberRole(memberId: string, newRole: string) {
+    startTransition(async () => {
+      try {
+        await patchJson(`/api/members/${memberId}`, { newRole });
+        pushToast("Role updated.", "success");
+        void refreshMembers();
+      } catch (err) {
+        pushToast(err instanceof Error ? err.message : "Failed.", "error");
+      }
+    });
+  }
+
+  function handleRemoveMember(memberId: string, name: string) {
+    setConfirmAction({
+      title: "Remove member",
+      message: `Are you sure you want to remove ${name} from this workspace? They will lose access to all projects and environments.`,
+      destructive: true,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            await deleteJson(`/api/members/${memberId}`);
+            pushToast("Member removed.", "success");
+            void refreshMembers();
+          } catch (err) {
+            pushToast(err instanceof Error ? err.message : "Failed.", "error");
+          }
+        });
+      },
+    });
+  }
+
+  function toggleProjectExpanded(projectId: string) {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
   }
 
   // --- Editor helpers ---
@@ -740,6 +923,7 @@ export function DashboardClient() {
     workspace: { title: "New workspace", placeholder: "Workspace name" },
     project: { title: "New project", placeholder: "Project name" },
     environment: { title: "New environment", placeholder: "Environment name (e.g. production)" },
+    invite: { title: "Invite member", placeholder: "Email address" },
   };
 
   // ---------------------------------------------------------------------------
@@ -754,80 +938,142 @@ export function DashboardClient() {
           <span>Tokengate</span>
         </div>
 
-        {/* Workspaces */}
+        {/* Workspace Switcher */}
         <div className="sidebar-section">
-          <span className="sidebar-section-label">Workspaces</span>
           {loadingWorkspaces && (
             <>
               <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "60%" }} />
             </>
           )}
-          {!loadingWorkspaces && workspaces.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No workspaces yet</span>}
-          {workspaces.map((w) => w.workspace ? (
-            <button key={w.workspace.id} className={`sidebar-item${w.workspace.id === selectedWorkspaceId ? " active" : ""}`} onClick={() => setSelectedWorkspaceId(w.workspace!.id)}>
-              <IconBox size={14} /><span>{w.workspace.name}</span>
-              <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>{w.membership.role}</span>
-            </button>
-          ) : null)}
+          {!loadingWorkspaces && (
+            <div className="workspace-switcher">
+              <button
+                className="workspace-switcher-trigger"
+                onClick={() => setShowWorkspaceSwitcher(!showWorkspaceSwitcher)}
+              >
+                <IconBox size={14} />
+                <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>
+                  {selectedWorkspace?.name ?? "Select workspace"}
+                </span>
+                {selectedMembership && (
+                  <span className="role-badge" data-role={selectedMembership.role}>{selectedMembership.role}</span>
+                )}
+                <IconChevronDown size={12} />
+              </button>
+              {showWorkspaceSwitcher && (
+                <div className="workspace-switcher-dropdown">
+                  {workspaces.map((w) => w.workspace ? (
+                    <button
+                      key={w.workspace.id}
+                      className={`sidebar-item${w.workspace.id === selectedWorkspaceId ? " active" : ""}`}
+                      onClick={() => { setSelectedWorkspaceId(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); }}
+                    >
+                      <IconBox size={14} />
+                      <span style={{ flex: 1, textAlign: "left" }}>{w.workspace.name}</span>
+                      <span className="role-badge" data-role={w.membership.role}>{w.membership.role}</span>
+                    </button>
+                  ) : null)}
+                  <div className="divider" style={{ margin: "4px 0" }} />
+                  <button className="sidebar-item" onClick={() => { setModal("workspace"); setModalName(""); setShowWorkspaceSwitcher(false); }}>
+                    <IconPlus size={14} /><span>New workspace</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Projects */}
+        {/* Project tree */}
         {selectedWorkspaceId && (
           <div className="sidebar-section">
-            <span className="sidebar-section-label">Projects</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px 8px" }}>
+              <span className="sidebar-section-label" style={{ padding: 0 }}>Projects</span>
+              <button
+                className="icon-button"
+                style={{ width: 22, height: 22 }}
+                onClick={() => { setModal("project"); setModalName(""); }}
+                title="New project"
+              >
+                <IconPlus size={12} />
+              </button>
+            </div>
             {loadingProjects && (
               <>
                 <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "55%" }} />
               </>
             )}
             {!loadingProjects && projects.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No projects</span>}
-            {projects.map((p) => (
-              <button key={p.id} className={`sidebar-item${p.id === selectedProjectId ? " active" : ""}`} onClick={() => setSelectedProjectId(p.id)}>
-                <IconFolder size={14} /><span>{p.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Environments */}
-        {selectedProjectId && (
-          <div className="sidebar-section">
-            <span className="sidebar-section-label">Environments</span>
-            {loadingEnvironments && (
-              <>
-                <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "50%" }} />
-              </>
-            )}
-            {!loadingEnvironments && environments.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No environments</span>}
-            {environments.map((e) => {
-              const meta = environmentsMeta.find((m) => m.environment.id === e.id);
-              const isSelected = e.id === selectedEnvironmentId;
+            {projects.map((proj) => {
+              const isExpanded = expandedProjects.has(proj.id);
+              const projectEnvs = environments.filter(() => selectedProjectId === proj.id);
               return (
-                <div key={e.id}>
-                  <button className={`sidebar-item${isSelected ? " active" : ""}`} onClick={() => setSelectedEnvironmentId(e.id)}>
-                    <IconLayers size={14} />
-                    <span style={{ flex: 1, textAlign: "left" }}>{e.name}</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-                      {meta?.latestRevisionTimestamp && (
-                        <span className="muted" style={{ fontSize: 11 }}>{formatRelativeTime(meta.latestRevisionTimestamp)}</span>
-                      )}
-                      {isSelected && (isEnvUnlocked ? <IconUnlock size={12} /> : <IconLock size={12} />)}
+                <div key={proj.id}>
+                  <button
+                    className={`sidebar-item${proj.id === selectedProjectId ? " active" : ""}`}
+                    onClick={() => {
+                      setSelectedProjectId(proj.id);
+                      toggleProjectExpanded(proj.id);
+                      setActiveView("secrets");
+                    }}
+                  >
+                    <span style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 120ms ease", display: "inline-flex" }}>
+                      <IconChevron size={12} />
                     </span>
+                    <IconFolder size={14} />
+                    <span style={{ flex: 1, textAlign: "left" }}>{proj.name}</span>
                   </button>
-                  {/* File list under selected environment */}
-                  {isSelected && secretSets.length > 0 && (
-                    <div style={{ paddingLeft: 20 }}>
-                      {secretSets.map((ss) => (
-                        <button
-                          key={ss.id}
-                          className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""}`}
-                          style={{ fontSize: 13, padding: "4px 12px" }}
-                          onClick={() => setSelectedSecretSetId(ss.id)}
-                        >
-                          <IconFile size={12} />
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{ss.filePath || ".env"}</span>
-                        </button>
-                      ))}
+                  {/* Environments under project */}
+                  {isExpanded && proj.id === selectedProjectId && (
+                    <div className="sidebar-tree-children">
+                      {loadingEnvironments && <div className="sidebar-skeleton" style={{ width: "70%" }} />}
+                      {!loadingEnvironments && projectEnvs.length === 0 && (
+                        <span className="muted" style={{ fontSize: 12, padding: "4px 12px 4px 24px", display: "block" }}>No environments</span>
+                      )}
+                      {!loadingEnvironments && environments.map((env) => {
+                        const meta = environmentsMeta.find((m) => m.environment.id === env.id);
+                        const isSelected = env.id === selectedEnvironmentId;
+                        return (
+                          <div key={env.id}>
+                            <button
+                              className={`sidebar-item${isSelected ? " active" : ""}`}
+                              style={{ paddingLeft: 24 }}
+                              onClick={() => { setSelectedEnvironmentId(env.id); setActiveView("secrets"); }}
+                            >
+                              <IconLayers size={13} />
+                              <span style={{ flex: 1, textAlign: "left" }}>{env.name}</span>
+                              <span style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+                                {meta?.latestRevisionTimestamp && (
+                                  <span className="muted" style={{ fontSize: 10 }}>{formatRelativeTime(meta.latestRevisionTimestamp)}</span>
+                                )}
+                                {isSelected && (isEnvUnlocked ? <IconUnlock size={11} /> : <IconLock size={11} />)}
+                              </span>
+                            </button>
+                            {/* File list under selected environment */}
+                            {isSelected && secretSets.length > 0 && (
+                              <div className="sidebar-tree-children">
+                                {secretSets.map((ss) => (
+                                  <button
+                                    key={ss.id}
+                                    className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""}`}
+                                    style={{ fontSize: 12, padding: "3px 12px 3px 40px" }}
+                                    onClick={() => setSelectedSecretSetId(ss.id)}
+                                  >
+                                    <IconFile size={11} />
+                                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{ss.filePath || ".env"}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button
+                        className="sidebar-item"
+                        style={{ paddingLeft: 24, fontSize: 12, opacity: 0.7 }}
+                        onClick={() => { setModal("environment"); setModalName(""); setModalPassword(""); }}
+                      >
+                        <IconPlus size={11} /><span>New environment</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -836,22 +1082,23 @@ export function DashboardClient() {
           </div>
         )}
 
-        <div className="divider" />
-        <div className="sidebar-section">
-          <button className="sidebar-item" onClick={() => { setModal("workspace"); setModalName(""); }}>
-            <IconPlus size={14} /><span>New workspace</span>
-          </button>
-          <button className="sidebar-item" onClick={() => { setModal("project"); setModalName(""); }} disabled={!selectedWorkspaceId}>
-            <IconPlus size={14} /><span>New project</span>
-          </button>
-          <button className="sidebar-item" onClick={() => { setModal("environment"); setModalName(""); setModalPassword(""); }} disabled={!selectedProjectId}>
-            <IconPlus size={14} /><span>New environment</span>
-          </button>
-        </div>
-
-        <div style={{ marginTop: "auto", padding: "12px 18px", borderTop: "1px solid var(--sidebar-border)", display: "flex", alignItems: "center", gap: 10 }}>
-          <UserButton appearance={{ elements: { avatarBox: { width: 28, height: 28 } } }} />
-          <span className="muted" style={{ fontSize: 12 }}>Account</span>
+        {/* Bottom section */}
+        <div style={{ marginTop: "auto" }}>
+          <div className="divider" />
+          {selectedWorkspaceId && (
+            <button
+              className={`sidebar-item${activeView === "settings" ? " active" : ""}`}
+              style={{ margin: "4px 10px", width: "calc(100% - 20px)" }}
+              onClick={() => setActiveView(activeView === "settings" ? "secrets" : "settings")}
+            >
+              <IconSettings size={14} />
+              <span>Workspace settings</span>
+            </button>
+          )}
+          <div style={{ padding: "8px 18px 12px", borderTop: "1px solid var(--sidebar-border)", display: "flex", alignItems: "center", gap: 10 }}>
+            <UserButton appearance={{ elements: { avatarBox: { width: 28, height: 28 } } }} />
+            <span className="muted" style={{ fontSize: 12 }}>Account</span>
+          </div>
         </div>
       </aside>
 
@@ -863,9 +1110,10 @@ export function DashboardClient() {
             {selectedWorkspace && (
               <>
                 <span>{selectedWorkspace.name}</span>
-                {selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
-                {selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
-                {selectedSecretSet && <><IconChevron size={12} /><span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{selectedSecretSet.filePath || ".env"}</span></>}
+                {activeView === "settings" && <><IconChevron size={12} /><span>Settings</span></>}
+                {activeView === "secrets" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
+                {activeView === "secrets" && selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
+                {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{selectedSecretSet.filePath || ".env"}</span></>}
               </>
             )}
             {!selectedWorkspace && !loadingWorkspaces && <span className="muted">Select a workspace to begin</span>}
@@ -884,8 +1132,119 @@ export function DashboardClient() {
           </div>
         </div>
 
+        {/* SETTINGS VIEW */}
+        {activeView === "settings" && selectedWorkspace && (
+          <div className="fade-in" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* General */}
+            <div className="panel" style={{ padding: 20 }}>
+              <h3 style={{ marginBottom: 16 }}>General</h3>
+              <div style={{ display: "grid", gap: 12, fontSize: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="muted" style={{ width: 80 }}>Name</span>
+                  <span style={{ fontWeight: 600 }}>{selectedWorkspace.name}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="muted" style={{ width: 80 }}>Slug</span>
+                  <code style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{selectedWorkspace.slug}</code>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="muted" style={{ width: 80 }}>Type</span>
+                  <span className="tag">{selectedWorkspace.type}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Members */}
+            <div className="panel" style={{ padding: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><IconUsers size={16} /> Members</h3>
+                {isOwnerOrAdmin && (
+                  <button className="button sm" onClick={() => { setModal("invite"); setInviteEmail(""); setInviteRole("member"); setLastInviteLink(null); }}>
+                    <IconPlus size={12} /> Invite
+                  </button>
+                )}
+              </div>
+              {loadingMembers && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 12 }}>
+                  <div className="spinner" /> <span className="muted">Loading members...</span>
+                </div>
+              )}
+              {!loadingMembers && (
+                <div className="members-list">
+                  {members.map((m) => (
+                    <div key={m.id} className="member-row">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{m.fullName || "Unknown"}</div>
+                        <div className="muted" style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{m.email || m.userId}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {m.role === "owner" ? (
+                          <span className="role-badge" data-role="owner">owner</span>
+                        ) : isOwner ? (
+                          <select
+                            className="select"
+                            style={{ width: "auto", fontSize: 12, padding: "4px 28px 4px 8px", border: "2px solid var(--border-light)" }}
+                            value={m.role}
+                            onChange={(e) => handleUpdateMemberRole(m.id, e.target.value)}
+                          >
+                            <option value="admin">admin</option>
+                            <option value="member">member</option>
+                            <option value="viewer">viewer</option>
+                          </select>
+                        ) : (
+                          <span className="role-badge" data-role={m.role}>{m.role}</span>
+                        )}
+                        {isOwnerOrAdmin && m.role !== "owner" && (
+                          <button
+                            className="icon-button"
+                            style={{ color: "var(--error)" }}
+                            onClick={() => handleRemoveMember(m.id, m.fullName || m.email || "this member")}
+                            title="Remove member"
+                          >
+                            <IconTrash size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Pending Invites */}
+            {isOwnerOrAdmin && pendingInvites.length > 0 && (
+              <div className="panel" style={{ padding: 20 }}>
+                <h3 style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><IconMail size={16} /> Pending invites</h3>
+                <div className="members-list">
+                  {pendingInvites.map((inv) => (
+                    <div key={inv.id} className="member-row">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, fontFamily: "var(--font-mono)" }}>{inv.email}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          Invited {formatRelativeTime(inv.createdAt)} &middot; Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="role-badge" data-role={inv.role}>{inv.role}</span>
+                        <button
+                          className="icon-button"
+                          style={{ color: "var(--error)" }}
+                          onClick={() => handleCancelInvite(inv.id)}
+                          title="Cancel invite"
+                        >
+                          <IconX size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Initial loading — workspaces haven't loaded yet */}
-        {loadingWorkspaces && (
+        {activeView === "secrets" && loadingWorkspaces && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
             <p className="muted" style={{ marginTop: 16 }}>Loading your workspaces...</p>
@@ -893,7 +1252,7 @@ export function DashboardClient() {
         )}
 
         {/* Loading projects after workspace selected */}
-        {!loadingWorkspaces && selectedWorkspaceId && loadingProjects && !selectedProjectId && (
+        {activeView === "secrets" && !loadingWorkspaces && selectedWorkspaceId && loadingProjects && !selectedProjectId && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
             <p className="muted" style={{ marginTop: 16 }}>Loading projects...</p>
@@ -901,7 +1260,7 @@ export function DashboardClient() {
         )}
 
         {/* Loading environments after project selected */}
-        {!loadingWorkspaces && !loadingProjects && selectedProjectId && loadingEnvironments && !selectedEnvironmentId && (
+        {activeView === "secrets" && !loadingWorkspaces && !loadingProjects && selectedProjectId && loadingEnvironments && !selectedEnvironmentId && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
             <p className="muted" style={{ marginTop: 16 }}>Loading environments...</p>
@@ -909,7 +1268,7 @@ export function DashboardClient() {
         )}
 
         {/* Loading secret set metadata */}
-        {!loadingWorkspaces && selectedEnvironmentId && loadingSecrets && (
+        {activeView === "secrets" && !loadingWorkspaces && selectedEnvironmentId && loadingSecrets && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
             <p className="muted" style={{ marginTop: 16 }}>Loading secrets...</p>
@@ -917,7 +1276,7 @@ export function DashboardClient() {
         )}
 
         {/* No workspaces — only show after loading completes */}
-        {!loadingWorkspaces && workspaces.length === 0 && (
+        {activeView === "secrets" && !loadingWorkspaces && workspaces.length === 0 && (
           <div className="empty-state fade-in">
             <div style={{
               width: 72,
@@ -955,7 +1314,7 @@ export function DashboardClient() {
         )}
 
         {/* No environment selected */}
-        {!loadingWorkspaces && !loadingProjects && !loadingEnvironments && workspaces.length > 0 && !selectedEnvironmentId && (
+        {activeView === "secrets" && !loadingWorkspaces && !loadingProjects && !loadingEnvironments && workspaces.length > 0 && !selectedEnvironmentId && (
           <div className="empty-state fade-in">
             <div style={{
               width: 56,
@@ -974,7 +1333,7 @@ export function DashboardClient() {
         )}
 
         {/* Environment selected but locked */}
-        {!loadingSecrets && selectedEnvironmentId && secretSets.length > 0 && !isEnvUnlocked && (
+        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length > 0 && !isEnvUnlocked && (
           <div className="lock-screen fade-in">
             <div className="lock-icon"><IconLock size={32} /></div>
             <h2 style={{ marginBottom: 8 }}>Enter environment password</h2>
@@ -1011,7 +1370,7 @@ export function DashboardClient() {
         )}
 
         {/* Environment selected, no secret sets (edge case — only after loading) */}
-        {!loadingSecrets && selectedEnvironmentId && secretSets.length === 0 && (
+        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length === 0 && (
           <div className="empty-state fade-in">
             <IconShield size={40} />
             <h3 style={{ margin: "12px 0 4px" }}>No secret set</h3>
@@ -1020,7 +1379,7 @@ export function DashboardClient() {
         )}
 
         {/* UNLOCKED — Key-value editor */}
-        {!loadingSecrets && selectedEnvironmentId && selectedSecretSet && isEnvUnlocked && (
+        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && selectedSecretSet && isEnvUnlocked && (
           <div className="fade-in" style={{ padding: 24 }}>
             <div className="env-editor panel">
               <div className="env-editor-header">
@@ -1129,19 +1488,23 @@ export function DashboardClient() {
               <button className="icon-button" onClick={() => setModal(null)}><IconX size={16} /></button>
             </div>
             <div className="modal-body">
-              <div className="field">
-                <span>Name</span>
-                <input
-                  value={modalName}
-                  onChange={(e) => setModalName(e.target.value)}
-                  placeholder={modalLabels[modal].placeholder}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && modalName.trim() && (modal !== "environment" || modalPassword.trim())) handleModalSubmit();
-                  }}
-                />
-              </div>
-              {modalName.trim() && <p className="muted" style={{ fontSize: 13 }}>Slug: <code>{toSlug(modalName)}</code></p>}
+              {modal !== "invite" && (
+                <>
+                  <div className="field">
+                    <span>Name</span>
+                    <input
+                      value={modalName}
+                      onChange={(e) => setModalName(e.target.value)}
+                      placeholder={modalLabels[modal].placeholder}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && modalName.trim() && (modal !== "environment" || modalPassword.trim())) handleModalSubmit();
+                      }}
+                    />
+                  </div>
+                  {modalName.trim() && <p className="muted" style={{ fontSize: 13 }}>Slug: <code>{toSlug(modalName)}</code></p>}
+                </>
+              )}
 
               {/* Environment password field */}
               {modal === "environment" && (
@@ -1162,15 +1525,65 @@ export function DashboardClient() {
                 </div>
               )}
 
+              {/* Invite fields */}
+              {modal === "invite" && (
+                <>
+                  <div className="field">
+                    <span>Email</span>
+                    <input
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="team@example.com"
+                      type="email"
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === "Enter" && inviteEmail.trim()) handleModalSubmit(); }}
+                    />
+                  </div>
+                  <div className="field">
+                    <span>Role</span>
+                    <select className="select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "admin" | "member" | "viewer")}>
+                      <option value="admin">Admin</option>
+                      <option value="member">Member</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                  </div>
+                  {lastInviteLink && (
+                    <div style={{ padding: 12, background: "var(--surface-hover)", border: "2px solid var(--border-light)" }}>
+                      <span className="muted" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>Invite link (share with the user):</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <code style={{ fontFamily: "var(--font-mono)", fontSize: 11, flex: 1, wordBreak: "break-all" }}>{lastInviteLink}</code>
+                        <button
+                          className="icon-button"
+                          onClick={() => { void navigator.clipboard.writeText(lastInviteLink); pushToast("Copied to clipboard.", "success"); }}
+                          title="Copy link"
+                        >
+                          <IconCopy size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
                 <button className="button secondary" onClick={() => setModal(null)}>Cancel</button>
-                <button
-                  className="button"
-                  onClick={handleModalSubmit}
-                  disabled={!modalName.trim() || (modal === "environment" && !modalPassword.trim()) || isPending}
-                >
-                  {isPending ? "Creating..." : "Create"}
-                </button>
+                {modal !== "invite" ? (
+                  <button
+                    className="button"
+                    onClick={handleModalSubmit}
+                    disabled={!modalName.trim() || (modal === "environment" && !modalPassword.trim()) || isPending}
+                  >
+                    {isPending ? "Creating..." : "Create"}
+                  </button>
+                ) : (
+                  <button
+                    className="button"
+                    onClick={handleModalSubmit}
+                    disabled={!inviteEmail.trim() || isPending}
+                  >
+                    {isPending ? "Sending..." : "Send invite"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

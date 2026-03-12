@@ -21,6 +21,7 @@ import { normalizeEnvDocument } from "@tokengate/env-format";
 import { TokengateConvexClient } from "@tokengate/sdk/convex-client";
 import {
   AuthError,
+  PermissionError,
   convexFunctions,
   type CliConfig,
   type CreateRevisionResult,
@@ -130,6 +131,11 @@ try {
     await clearAuth();
     spinner.stop("Credentials cleared.");
     p.log.info(`Run ${pc.cyan("tokengate login")} to sign in again.`);
+    process.exitCode = 1;
+  } else if (error instanceof PermissionError) {
+    const role = error.userRole ? `Your role: ${pc.bold(error.userRole)}.` : "You are not a member of this workspace.";
+    const required = error.requiredRoles.length > 0 ? ` Required: ${pc.bold(error.requiredRoles.join(" or "))} or above.` : "";
+    p.log.error(`Permission denied. ${role}${required} Contact the workspace owner for access.`);
     process.exitCode = 1;
   } else if (isCancel(error)) {
     p.cancel("Cancelled.");

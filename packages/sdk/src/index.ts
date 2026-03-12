@@ -92,7 +92,12 @@ export interface AuditEvent {
     | "revision.created"
     | "device.registered"
     | "device.revoked"
-    | "revision.restored";
+    | "revision.restored"
+    | "invite.created"
+    | "invite.accepted"
+    | "invite.cancelled"
+    | "member.removed"
+    | "member.role_changed";
   subjectId: string;
   metadata?: Record<string, string | number | boolean | null>;
   createdAt: number;
@@ -159,6 +164,35 @@ export interface CliConfig {
   encryptedWorkspaceKeys?: string;
 }
 
+export interface Invite {
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  invitedBy: string;
+  status: "pending" | "accepted" | "expired";
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface InviteWithWorkspace {
+  invite: Invite;
+  workspace: Workspace | null;
+}
+
+export interface MemberWithProfile {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceRole;
+  invitedBy?: string;
+  joinedAt: number;
+  email: string | null;
+  fullName: string | null;
+  imageUrl: string | null;
+}
+
 export interface WorkspaceWithMembership {
   workspace: Workspace | null;
   membership: WorkspaceMember;
@@ -188,9 +222,17 @@ export const convexFunctions = {
   restoreRevision: "revisions:restoreRevision",
   registerDevice: "devices:registerDevice",
   listDevices: "devices:listDevices",
-  revokeDevice: "devices:revokeDevice"
+  revokeDevice: "devices:revokeDevice",
+  createInvite: "invites:createInvite",
+  acceptInvite: "invites:acceptInvite",
+  cancelInvite: "invites:cancelInvite",
+  listPendingInvites: "invites:listPendingInvites",
+  listMyInvites: "invites:listMyInvites",
+  listMembers: "members:listMembers",
+  updateMemberRole: "members:updateMemberRole",
+  removeMember: "members:removeMember",
 } as const;
 
 export type ConvexFunctionName = (typeof convexFunctions)[keyof typeof convexFunctions];
 
-export { AuthError } from "./convex-client";
+export { AuthError, PermissionError } from "./convex-client";

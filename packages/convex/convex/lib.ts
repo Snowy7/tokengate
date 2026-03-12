@@ -25,7 +25,11 @@ export async function requireWorkspaceRole(
     .unique();
 
   if (!membership || !allowedRoles.includes(membership.role as Role)) {
-    throw new ConvexError("Forbidden");
+    throw new ConvexError({
+      code: "Forbidden",
+      userRole: membership?.role ?? null,
+      requiredRoles: allowedRoles,
+    });
   }
 
   return { identity, membership };

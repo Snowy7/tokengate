@@ -66,6 +66,10 @@ export class TokengateConvexClient {
       if (isAuthError(payload.errorMessage)) {
         throw new AuthError(payload.errorMessage);
       }
+      const permErr = tryParsePermissionError(payload.errorMessage);
+      if (permErr) {
+        throw permErr;
+      }
       throw new Error(payload.errorMessage);
     }
 
@@ -92,6 +96,18 @@ export class AuthError extends Error {
   }
 }
 
+export class PermissionError extends Error {
+  userRole: string | null;
+  requiredRoles: string[];
+
+  constructor(message: string, userRole: string | null, requiredRoles: string[]) {
+    super(message);
+    this.name = "PermissionError";
+    this.userRole = userRole;
+    this.requiredRoles = requiredRoles;
+  }
+}
+
 function isAuthError(text: string): boolean {
   const lower = text.toLowerCase();
   return (
@@ -100,6 +116,32 @@ function isAuthError(text: string): boolean {
     lower.includes("token") && lower.includes("expired") ||
     lower.includes("could not verify")
   );
+}
+
+function tryParsePermissionError(message: string): PermissionError | null {
+  // ConvexError wraps structured data as JSON in the error message
+  try {
+    // Try to find JSON in the message (ConvexError format)
+    const jsonMatch = message.match(/\{[^}]*"code"\s*:\s*"Forbidden"[^}]*\}/);
+    if (jsonMatch) {
+      const data = JSON.parse(jsonMatch[0]);
+      if (data.code === "Forbidden") {
+        return new PermissionError(
+          "Forbidden",
+          data.userRole ?? null,
+          data.requiredRoles ?? [],
+        );
+      }
+    }
+  } catch {
+    // Not structured, check for plain "Forbidden"
+  }
+
+  if (message.includes("Forbidden")) {
+    return new PermissionError("Forbidden", null, []);
+  }
+
+  return null;
 }
 
 function normalizeConvexValue<T>(value: T): T {

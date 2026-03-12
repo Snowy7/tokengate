@@ -1342,6 +1342,125 @@ p {
 
 
 /* ============================================================
+   Workspace Switcher
+   ============================================================ */
+
+.workspace-switcher {
+  position: relative;
+}
+
+.workspace-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid var(--sidebar-border);
+  background: var(--sidebar-surface);
+  color: var(--sidebar-text-bright);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.workspace-switcher-trigger:hover {
+  background: var(--sidebar-surface-hover);
+  border-color: var(--sidebar-accent);
+}
+
+.workspace-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--sidebar-bg);
+  border: 2px solid var(--sidebar-accent);
+  box-shadow: 4px 4px 0 rgba(0, 214, 143, 0.15);
+  animation: fade-in 120ms ease;
+}
+
+
+/* ============================================================
+   Sidebar Tree
+   ============================================================ */
+
+.sidebar-tree-children {
+  padding-left: 8px;
+  border-left: 2px solid var(--sidebar-border);
+  margin-left: 18px;
+}
+
+
+/* ============================================================
+   Members List
+   ============================================================ */
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.member-row:last-child {
+  border-bottom: none;
+}
+
+
+/* ============================================================
+   Role Badges
+   ============================================================ */
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  border: 2px solid;
+  white-space: nowrap;
+}
+
+.role-badge[data-role="owner"] {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.role-badge[data-role="admin"] {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: var(--info);
+}
+
+.role-badge[data-role="member"] {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+}
+
+.role-badge[data-role="viewer"] {
+  background: var(--surface-hover);
+  color: var(--muted);
+  border-color: var(--border-light);
+}
+
+
+/* ============================================================
    Responsive
    ============================================================ */
 
