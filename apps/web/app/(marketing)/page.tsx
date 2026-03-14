@@ -361,7 +361,7 @@ export default function MarketingPage() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: clamp(32px, 3vw, 80px);
-  max-width: min(1280px, 80vw);
+  max-width: clamp(320px, 80vw, 3200px);
   margin: 0 auto;
   padding: clamp(48px, 5vh, 140px) clamp(24px, 3vw, 80px) clamp(40px, 4vh, 120px);
   align-items: center;
@@ -485,7 +485,7 @@ export default function MarketingPage() {
 
 /* ========== SECTION SHARED ========== */
 .tg-section {
-  max-width: min(1280px, 80vw);
+  max-width: clamp(320px, 80vw, 3200px);
   margin: 0 auto;
   padding: clamp(48px, 5vh, 120px) clamp(24px, 3vw, 80px);
   min-height: 60vh;
@@ -654,7 +654,7 @@ export default function MarketingPage() {
 }
 
 .tg-encrypt-inner {
-  max-width: min(1280px, 80vw);
+  max-width: clamp(320px, 80vw, 3200px);
   margin: 0 auto;
   width: 100%;
 }
