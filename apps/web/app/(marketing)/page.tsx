@@ -125,6 +125,28 @@ export default function MarketingPage() {
   .tg-dot { animation: none !important; }
 }
 
+/* 4K+ */
+@media (min-width: 2560px) {
+  .tg-hero, .tg-section, .tg-encrypt-section { max-width: 1800px; }
+  .tg-hero-headline { font-size: 72px; }
+  .tg-hero-sub { font-size: 20px; max-width: 560px; }
+  .tg-nav { max-width: 1800px; height: 72px; }
+  .tg-section-title { font-size: 34px; }
+  .tg-cta { max-width: 1800px; }
+  .tg-footer { max-width: 1800px; font-size: 14px; }
+  .tg-stat-number { font-size: 40px; }
+  .tg-stat-label { font-size: 13px; }
+}
+
+/* 2K */
+@media (min-width: 1920px) and (max-width: 2559px) {
+  .tg-hero, .tg-section, .tg-encrypt-section { max-width: 1440px; }
+  .tg-hero-headline { font-size: 60px; }
+  .tg-nav { max-width: 1440px; }
+  .tg-cta { max-width: 1440px; }
+  .tg-footer { max-width: 1440px; }
+}
+
 /* ========== NAV ========== */
 .tg-nav {
   position: sticky;
