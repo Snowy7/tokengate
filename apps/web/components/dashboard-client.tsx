@@ -1027,7 +1027,7 @@ export function DashboardClient() {
                     <div className="sidebar-tree-children">
                       {loadingEnvironments && <div className="sidebar-skeleton" style={{ width: "70%" }} />}
                       {!loadingEnvironments && projectEnvs.length === 0 && (
-                        <span className="muted" style={{ fontSize: 12, padding: "4px 12px 4px 24px", display: "block" }}>No environments</span>
+                        <span className="muted" style={{ fontSize: 12, padding: "4px 12px 4px 8px", display: "block" }}>No environments</span>
                       )}
                       {!loadingEnvironments && environments.map((env) => {
                         const meta = environmentsMeta.find((m) => m.environment.id === env.id);
@@ -1036,7 +1036,7 @@ export function DashboardClient() {
                           <div key={env.id}>
                             <button
                               className={`sidebar-item${isSelected ? " active" : ""}`}
-                              style={{ paddingLeft: 24 }}
+                              style={{ paddingLeft: 8 }}
                               onClick={() => { setSelectedEnvironmentId(env.id); setActiveView("secrets"); }}
                             >
                               <IconLayers size={13} />
@@ -1055,7 +1055,7 @@ export function DashboardClient() {
                                   <button
                                     key={ss.id}
                                     className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""}`}
-                                    style={{ fontSize: 12, padding: "3px 12px 3px 40px" }}
+                                    style={{ fontSize: 12, padding: "3px 8px" }}
                                     onClick={() => setSelectedSecretSetId(ss.id)}
                                   >
                                     <IconFile size={11} />
@@ -1069,7 +1069,7 @@ export function DashboardClient() {
                       })}
                       <button
                         className="sidebar-item"
-                        style={{ paddingLeft: 24, fontSize: 12, opacity: 0.7 }}
+                        style={{ paddingLeft: 8, fontSize: 12, opacity: 0.7 }}
                         onClick={() => { setModal("environment"); setModalName(""); setModalPassword(""); }}
                       >
                         <IconPlus size={11} /><span>New environment</span>
