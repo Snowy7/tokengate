@@ -22,7 +22,7 @@ import type {
   SecretRevision,
   SecretSet,
 } from "@tokengate/sdk";
-import { useSidebarData, type EnvironmentWithMeta } from "./use-sidebar-data";
+import { useSidebarData } from "./use-sidebar-data";
 
 // ---------------------------------------------------------------------------
 // Icons

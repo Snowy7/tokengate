@@ -5,75 +5,55 @@ import type {
   MemberWithProfile,
   Project,
   SecretSet,
+  SidebarData,
+  SidebarEnvMeta,
   WorkspaceWithMembership,
 } from "@tokengate/sdk";
 
 // ---------------------------------------------------------------------------
-// Types
+// Re-export types the dashboard needs
 // ---------------------------------------------------------------------------
 
-interface EnvFileMeta {
-  secretSetId: string;
-  filePath: string | null;
-  latestRevision: number | null;
-}
+export type EnvironmentWithMeta = SidebarEnvMeta;
+export type { SidebarEnvMeta as EnvFileMeta };
 
-interface EnvironmentWithMeta {
-  environment: Environment;
-  fileCount: number;
-  files: EnvFileMeta[];
-  latestRevisionTimestamp: number | null;
-}
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
 interface SidebarState {
-  // Data
   workspaces: WorkspaceWithMembership[];
   projects: Project[];
-  environments: Environment[];
-  environmentsMeta: EnvironmentWithMeta[];
+  environmentsMeta: SidebarEnvMeta[];
   secretSets: SecretSet[];
   members: MemberWithProfile[];
   pendingInvites: Invite[];
 
-  // Selections
   selectedWorkspaceId: string;
   selectedProjectId: string;
   selectedEnvironmentId: string;
   selectedSecretSetId: string;
 
-  // Loading flags — one per level, collapsed into a single object
   loading: {
-    workspaces: boolean;
-    projects: boolean;
-    environments: boolean;
+    sidebar: boolean;
     secretSets: boolean;
     members: boolean;
   };
 }
 
-type SidebarAction =
-  | { type: "SET_WORKSPACES"; workspaces: WorkspaceWithMembership[]; autoSelect: string }
-  | { type: "SET_PROJECTS"; projects: Project[]; autoSelect: string }
-  | { type: "SET_ENVIRONMENTS"; environments: Environment[]; meta: EnvironmentWithMeta[]; autoSelect: string }
+type Action =
+  | { type: "SIDEBAR_LOADED"; data: SidebarData; selectedWorkspaceId: string; selectedProjectId: string; selectedEnvironmentId: string }
   | { type: "SET_SECRET_SETS"; secretSets: SecretSet[]; autoSelect: string }
   | { type: "SET_MEMBERS"; members: MemberWithProfile[]; invites: Invite[] }
   | { type: "SELECT_WORKSPACE"; id: string }
   | { type: "SELECT_PROJECT"; id: string }
   | { type: "SELECT_ENVIRONMENT"; id: string }
   | { type: "SELECT_SECRET_SET"; id: string }
-  | { type: "LOADING"; key: keyof SidebarState["loading"]; value: boolean }
-  | { type: "CLEAR_BELOW_WORKSPACE" }
-  | { type: "CLEAR_BELOW_PROJECT" }
-  | { type: "CLEAR_BELOW_ENVIRONMENT" };
-
-// ---------------------------------------------------------------------------
-// Reducer
-// ---------------------------------------------------------------------------
+  | { type: "LOADING"; key: keyof SidebarState["loading"]; value: boolean };
 
 const initialState: SidebarState = {
   workspaces: [],
   projects: [],
-  environments: [],
   environmentsMeta: [],
   secretSets: [],
   members: [],
@@ -82,40 +62,24 @@ const initialState: SidebarState = {
   selectedProjectId: "",
   selectedEnvironmentId: "",
   selectedSecretSetId: "",
-  loading: {
-    workspaces: true,
-    projects: false,
-    environments: false,
-    secretSets: false,
-    members: false,
-  },
+  loading: { sidebar: true, secretSets: false, members: false },
 };
 
-function reducer(state: SidebarState, action: SidebarAction): SidebarState {
+function reducer(state: SidebarState, action: Action): SidebarState {
   switch (action.type) {
-    case "SET_WORKSPACES":
+    case "SIDEBAR_LOADED":
       return {
         ...state,
-        workspaces: action.workspaces,
-        selectedWorkspaceId: action.autoSelect,
-        loading: { ...state.loading, workspaces: false },
-      };
-
-    case "SET_PROJECTS":
-      return {
-        ...state,
-        projects: action.projects,
-        selectedProjectId: action.autoSelect,
-        loading: { ...state.loading, projects: false },
-      };
-
-    case "SET_ENVIRONMENTS":
-      return {
-        ...state,
-        environments: action.environments,
-        environmentsMeta: action.meta,
-        selectedEnvironmentId: action.autoSelect,
-        loading: { ...state.loading, environments: false },
+        workspaces: action.data.workspaces,
+        projects: action.data.projects,
+        environmentsMeta: action.data.environments,
+        selectedWorkspaceId: action.selectedWorkspaceId,
+        selectedProjectId: action.selectedProjectId,
+        selectedEnvironmentId: action.selectedEnvironmentId,
+        // Clear secret sets — they load on environment select
+        secretSets: [],
+        selectedSecretSetId: "",
+        loading: { ...state.loading, sidebar: false },
       };
 
     case "SET_SECRET_SETS":
@@ -135,12 +99,11 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
       };
 
     case "SELECT_WORKSPACE":
+      // Workspace changed — projects/envs will reload via sidebar fetch
       return {
         ...state,
         selectedWorkspaceId: action.id,
-        // Clear everything below
         projects: [],
-        environments: [],
         environmentsMeta: [],
         secretSets: [],
         selectedProjectId: "",
@@ -148,15 +111,13 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
         selectedSecretSetId: "",
         members: [],
         pendingInvites: [],
+        loading: { ...state.loading, sidebar: true },
       };
 
     case "SELECT_PROJECT":
       return {
         ...state,
         selectedProjectId: action.id,
-        // Clear everything below
-        environments: [],
-        environmentsMeta: [],
         secretSets: [],
         selectedEnvironmentId: "",
         selectedSecretSetId: "",
@@ -171,45 +132,10 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
       };
 
     case "SELECT_SECRET_SET":
-      return {
-        ...state,
-        selectedSecretSetId: action.id,
-      };
+      return { ...state, selectedSecretSetId: action.id };
 
     case "LOADING":
-      return {
-        ...state,
-        loading: { ...state.loading, [action.key]: action.value },
-      };
-
-    case "CLEAR_BELOW_WORKSPACE":
-      return {
-        ...state,
-        projects: [],
-        environments: [],
-        environmentsMeta: [],
-        secretSets: [],
-        selectedProjectId: "",
-        selectedEnvironmentId: "",
-        selectedSecretSetId: "",
-      };
-
-    case "CLEAR_BELOW_PROJECT":
-      return {
-        ...state,
-        environments: [],
-        environmentsMeta: [],
-        secretSets: [],
-        selectedEnvironmentId: "",
-        selectedSecretSetId: "",
-      };
-
-    case "CLEAR_BELOW_ENVIRONMENT":
-      return {
-        ...state,
-        secretSets: [],
-        selectedSecretSetId: "",
-      };
+      return { ...state, loading: { ...state.loading, [action.key]: action.value } };
 
     default:
       return state;
@@ -217,7 +143,7 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
 }
 
 // ---------------------------------------------------------------------------
-// Fetch helpers
+// Fetch
 // ---------------------------------------------------------------------------
 
 async function fetchJson<T>(input: string): Promise<T> {
@@ -232,10 +158,7 @@ async function fetchJson<T>(input: string): Promise<T> {
 
 export function useSidebarData() {
   const [state, dispatch] = useReducer(reducer, initialState);
-
-  // Track previous selections to avoid redundant fetches
-  const prevWorkspaceId = useRef("");
-  const prevProjectId = useRef("");
+  const prevWorkspaceId = useRef<string | null>(null);
   const prevEnvironmentId = useRef("");
 
   // --- Derived ---
@@ -251,9 +174,18 @@ export function useSidebarData() {
     () => state.projects.find((p) => p.id === state.selectedProjectId) ?? null,
     [state.selectedProjectId, state.projects],
   );
+
+  // Environments for the selected project only
+  const environments = useMemo(
+    () => state.environmentsMeta
+      .filter((em) => em.environment.projectId === state.selectedProjectId)
+      .map((em) => em.environment),
+    [state.environmentsMeta, state.selectedProjectId],
+  );
+
   const selectedEnvironment = useMemo(
-    () => state.environments.find((e) => e.id === state.selectedEnvironmentId) ?? null,
-    [state.selectedEnvironmentId, state.environments],
+    () => environments.find((e) => e.id === state.selectedEnvironmentId) ?? null,
+    [state.selectedEnvironmentId, environments],
   );
   const selectedSecretSet = useMemo(
     () => state.secretSets.find((s) => s.id === state.selectedSecretSetId) ?? null,
@@ -264,63 +196,41 @@ export function useSidebarData() {
   const isAdmin = selectedMembership?.role === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
 
-  // --- Load workspaces (initial) ---
-  const loadWorkspaces = useCallback(async () => {
-    dispatch({ type: "LOADING", key: "workspaces", value: true });
+  // --- Core: load sidebar data (single fetch) ---
+  const loadSidebar = useCallback(async (workspaceId?: string) => {
+    dispatch({ type: "LOADING", key: "sidebar", value: true });
     try {
-      const payload = await fetchJson<{ workspaces: WorkspaceWithMembership[] }>("/api/workspaces");
-      const ws = payload.workspaces;
-      const autoSelect = ws.some((w) => w.workspace?.id === state.selectedWorkspaceId)
-        ? state.selectedWorkspaceId
-        : ws[0]?.workspace?.id ?? "";
-      dispatch({ type: "SET_WORKSPACES", workspaces: ws, autoSelect });
-    } catch {
-      dispatch({ type: "LOADING", key: "workspaces", value: false });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      const url = workspaceId ? `/api/sidebar?workspaceId=${workspaceId}` : "/api/sidebar";
+      const data = await fetchJson<SidebarData>(url);
 
-  // --- Load projects when workspace changes ---
-  const loadProjects = useCallback(async (workspaceId: string) => {
-    if (!workspaceId) return;
-    dispatch({ type: "LOADING", key: "projects", value: true });
-    try {
-      const payload = await fetchJson<{ projects: Project[] }>(`/api/projects?workspaceId=${workspaceId}`);
-      const pjs = payload.projects;
-      const autoSelect = pjs.some((p) => p.id === state.selectedProjectId)
-        ? state.selectedProjectId
-        : pjs[0]?.id ?? "";
-      dispatch({ type: "SET_PROJECTS", projects: pjs, autoSelect });
-    } catch {
-      dispatch({ type: "LOADING", key: "projects", value: false });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      // Auto-select: prefer current selections if still valid
+      const wsId = workspaceId
+        ?? data.workspaces.find((w) => w.workspace?.id === state.selectedWorkspaceId)?.workspace?.id
+        ?? data.workspaces[0]?.workspace?.id
+        ?? "";
 
-  // --- Load environments when project changes ---
-  const loadEnvironments = useCallback(async (projectId: string) => {
-    if (!projectId) return;
-    dispatch({ type: "LOADING", key: "environments", value: true });
-    try {
-      const [envRes, metaRes] = await Promise.all([
-        fetchJson<{ environments: Environment[] }>(`/api/environments?projectId=${projectId}`),
-        fetchJson<{ environments: EnvironmentWithMeta[] }>(`/api/environments/meta?projectId=${projectId}`)
-          .catch(() => ({ environments: [] as EnvironmentWithMeta[] })),
-      ]);
-      const envs = envRes.environments;
-      const autoSelect = envs.some((e) => e.id === state.selectedEnvironmentId)
-        ? state.selectedEnvironmentId
-        : envs[0]?.id ?? "";
-      dispatch({ type: "SET_ENVIRONMENTS", environments: envs, meta: metaRes.environments, autoSelect });
+      const pId = data.projects.find((p) => p.id === state.selectedProjectId)?.id
+        ?? data.projects[0]?.id
+        ?? "";
+
+      // Find environments for the auto-selected project
+      const projectEnvs = data.environments.filter((em) => em.environment.projectId === pId);
+      const eId = projectEnvs.find((em) => em.environment.id === state.selectedEnvironmentId)?.environment.id
+        ?? projectEnvs[0]?.environment.id
+        ?? "";
+
+      dispatch({ type: "SIDEBAR_LOADED", data, selectedWorkspaceId: wsId, selectedProjectId: pId, selectedEnvironmentId: eId });
     } catch {
-      dispatch({ type: "LOADING", key: "environments", value: false });
+      dispatch({ type: "LOADING", key: "sidebar", value: false });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Load secret sets when environment changes ---
-  const loadSecretSets = useCallback(async (environmentId: string, meta: EnvironmentWithMeta[]) => {
+  const loadSecretSets = useCallback(async (environmentId: string) => {
     if (!environmentId) return;
     dispatch({ type: "LOADING", key: "secretSets", value: true });
     try {
-      const envMeta = meta.find((m) => m.environment.id === environmentId);
+      const envMeta = state.environmentsMeta.find((m) => m.environment.id === environmentId);
       let sets: SecretSet[] = [];
 
       if (envMeta && envMeta.files.length > 0) {
@@ -335,9 +245,9 @@ export function useSidebarData() {
     } catch {
       dispatch({ type: "LOADING", key: "secretSets", value: false });
     }
-  }, []);
+  }, [state.environmentsMeta]);
 
-  // --- Load members/invites ---
+  // --- Load members ---
   const loadMembers = useCallback(async (workspaceId: string, canListInvites: boolean) => {
     if (!workspaceId) return;
     dispatch({ type: "LOADING", key: "members", value: true });
@@ -354,35 +264,40 @@ export function useSidebarData() {
     }
   }, []);
 
-  // --- Cascade: workspace → projects ---
+  // --- Initial load ---
+  useEffect(() => { void loadSidebar(); }, [loadSidebar]);
+
+  // --- Reload when workspace selection changes (user picks different workspace) ---
   useEffect(() => {
     const wsId = state.selectedWorkspaceId;
+    if (prevWorkspaceId.current === null) {
+      // First render — already loaded by initial loadSidebar
+      prevWorkspaceId.current = wsId;
+      return;
+    }
     if (wsId === prevWorkspaceId.current) return;
     prevWorkspaceId.current = wsId;
-    if (!wsId) return;
-    void loadProjects(wsId);
-  }, [state.selectedWorkspaceId, loadProjects]);
+    if (wsId) void loadSidebar(wsId);
+  }, [state.selectedWorkspaceId, loadSidebar]);
 
-  // --- Cascade: project → environments ---
-  useEffect(() => {
-    const pId = state.selectedProjectId;
-    if (pId === prevProjectId.current) return;
-    prevProjectId.current = pId;
-    if (!pId) return;
-    void loadEnvironments(pId);
-  }, [state.selectedProjectId, loadEnvironments]);
-
-  // --- Cascade: environment → secret sets ---
+  // --- Load secret sets when environment changes ---
   useEffect(() => {
     const eId = state.selectedEnvironmentId;
     if (eId === prevEnvironmentId.current) return;
     prevEnvironmentId.current = eId;
-    if (!eId) return;
-    void loadSecretSets(eId, state.environmentsMeta);
-  }, [state.selectedEnvironmentId, state.environmentsMeta, loadSecretSets]);
+    if (eId) void loadSecretSets(eId);
+  }, [state.selectedEnvironmentId, loadSecretSets]);
 
-  // --- Initial load ---
-  useEffect(() => { void loadWorkspaces(); }, [loadWorkspaces]);
+  // --- Auto-select first environment when project changes ---
+  useEffect(() => {
+    if (!state.selectedProjectId || state.selectedEnvironmentId) return;
+    const projectEnvs = state.environmentsMeta.filter(
+      (em) => em.environment.projectId === state.selectedProjectId,
+    );
+    if (projectEnvs.length > 0) {
+      dispatch({ type: "SELECT_ENVIRONMENT", id: projectEnvs[0].environment.id });
+    }
+  }, [state.selectedProjectId, state.selectedEnvironmentId, state.environmentsMeta]);
 
   // --- Selection handlers ---
   const selectWorkspace = useCallback((id: string) => {
@@ -401,28 +316,18 @@ export function useSidebarData() {
     dispatch({ type: "SELECT_SECRET_SET", id });
   }, []);
 
-  // --- Refresh helpers (for after create/mutate) ---
+  // --- Refresh helpers ---
   const refreshWorkspaces = useCallback(async () => {
-    await loadWorkspaces();
-  }, [loadWorkspaces]);
-
-  const refreshProjects = useCallback(async () => {
-    if (state.selectedWorkspaceId) {
-      await loadProjects(state.selectedWorkspaceId);
-    }
-  }, [state.selectedWorkspaceId, loadProjects]);
+    await loadSidebar(state.selectedWorkspaceId || undefined);
+  }, [state.selectedWorkspaceId, loadSidebar]);
 
   const refreshEnvironments = useCallback(async () => {
-    if (state.selectedProjectId) {
-      await loadEnvironments(state.selectedProjectId);
-    }
-  }, [state.selectedProjectId, loadEnvironments]);
+    await loadSidebar(state.selectedWorkspaceId || undefined);
+  }, [state.selectedWorkspaceId, loadSidebar]);
 
   const refreshSecretSets = useCallback(async () => {
-    if (state.selectedEnvironmentId) {
-      await loadSecretSets(state.selectedEnvironmentId, state.environmentsMeta);
-    }
-  }, [state.selectedEnvironmentId, state.environmentsMeta, loadSecretSets]);
+    if (state.selectedEnvironmentId) await loadSecretSets(state.selectedEnvironmentId);
+  }, [state.selectedEnvironmentId, loadSecretSets]);
 
   const refreshMembers = useCallback(async () => {
     await loadMembers(state.selectedWorkspaceId, isOwnerOrAdmin);
@@ -431,6 +336,7 @@ export function useSidebarData() {
   return {
     // State
     ...state,
+    environments,
 
     // Derived
     selectedWorkspace,
@@ -442,6 +348,15 @@ export function useSidebarData() {
     isAdmin,
     isOwnerOrAdmin,
 
+    // Loading (compat aliases)
+    loading: {
+      workspaces: state.loading.sidebar,
+      projects: state.loading.sidebar,
+      environments: state.loading.sidebar,
+      secretSets: state.loading.secretSets,
+      members: state.loading.members,
+    },
+
     // Selection handlers
     selectWorkspace,
     selectProject,
@@ -450,11 +365,8 @@ export function useSidebarData() {
 
     // Refresh
     refreshWorkspaces,
-    refreshProjects,
     refreshEnvironments,
     refreshSecretSets,
     refreshMembers,
   };
 }
-
-export type { EnvironmentWithMeta, EnvFileMeta };

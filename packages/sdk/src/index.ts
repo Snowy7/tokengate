@@ -203,7 +203,21 @@ export interface EnvironmentWithSecretSet {
   secretSet: SecretSet | null;
 }
 
+export interface SidebarEnvMeta {
+  environment: Environment;
+  fileCount: number;
+  files: Array<{ secretSetId: string; filePath: string | null; latestRevision: number | null }>;
+  latestRevisionTimestamp: number | null;
+}
+
+export interface SidebarData {
+  workspaces: WorkspaceWithMembership[];
+  projects: Project[];
+  environments: SidebarEnvMeta[];
+}
+
 export const convexFunctions = {
+  loadSidebar: "sidebar:load",
   listWorkspaces: "workspaces:listWorkspaces",
   createWorkspace: "workspaces:createWorkspace",
   createProject: "workspaces:createProject",
