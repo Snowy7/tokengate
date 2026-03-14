@@ -191,42 +191,58 @@ export default function MarketingPage() {
   .tg-cta-sub { font-size: 19px; max-width: 600px; }
 }
 
-/* 4K (2560px+) */
+/* 4K (2560px+) — aggressive scaling, use vw for proportional sizing */
 @media (min-width: 2560px) {
-  .tg-hero, .tg-section { max-width: 2200px; }
-  .tg-encrypt-inner { max-width: 2200px; }
-  .tg-nav { padding: 0 clamp(64px, 6vw, 320px); }
+  .tg-hero, .tg-section { max-width: 80vw; }
+  .tg-encrypt-inner { max-width: 80vw; }
+  .tg-nav { padding: 0 10vw; height: 80px; }
 
-  .tg-hero { padding: 0 80px; min-height: calc(100vh - 80px); gap: 80px; }
-  .tg-hero-headline { font-size: 110px; }
-  .tg-hero-sub { font-size: 26px; max-width: 720px; }
-  .tg-section { padding: 0 80px; min-height: 85vh; }
-  .tg-encrypt-section { padding: 0 80px; min-height: 85vh; }
-  .tg-section-title { font-size: 48px; }
-  .tg-section-sub { font-size: 20px; }
-  .tg-nav { height: 80px; }
-  .tg-logo-box { width: 40px; height: 40px; font-size: 18px; border-width: 3px; }
-  .tg-logo-text { font-size: 22px; }
-  .tg-nav-link { font-size: 18px; gap: 24px; }
-  .tg-btn { padding: 18px 36px; font-size: 18px; border-width: 3px; }
-  .tg-btn-secondary { padding: 18px 36px; font-size: 18px; border-width: 3px; }
-  .tg-stat-number { font-size: 56px; }
-  .tg-stat-label { font-size: 17px; }
-  .tg-stat-cell { padding: 48px 36px; }
-  .tg-footer { padding: 48px clamp(64px, 6vw, 320px); font-size: 17px; }
-  .tg-showcase-grid { gap: 36px; }
-  .tg-showcase-card { padding: 36px; border-width: 3px; }
-  .tg-showcase-card h3 { font-size: 22px; }
-  .tg-showcase-card p { font-size: 18px; line-height: 1.7; }
-  .tg-terminal-body { font-size: 17px; padding: 36px; }
-  .tg-sync-panel { font-size: 17px; border-width: 3px; }
-  .tg-encrypt-flow { gap: 40px; }
-  .tg-encrypt-panel { padding: 40px; min-height: 340px; font-size: 16px; }
+  .tg-hero { padding: 0 0; min-height: calc(100vh - 80px); gap: 5vw; }
+  .tg-hero-headline { font-size: clamp(96px, 3.2vw, 160px); }
+  .tg-hero-sub { font-size: clamp(22px, 0.7vw, 32px); max-width: 40vw; line-height: 1.7; margin-bottom: 40px; }
+  .tg-hero-actions { gap: 20px; }
+  .tg-section { padding: 0; min-height: 85vh; }
+  .tg-encrypt-section { padding: 6vh 10vw; min-height: 85vh; }
+  .tg-section-title { font-size: clamp(40px, 1.4vw, 64px); margin-bottom: 16px; }
+  .tg-section-sub { font-size: clamp(16px, 0.55vw, 24px); }
+
+  .tg-logo-box { width: 44px; height: 44px; font-size: 20px; border-width: 3px; }
+  .tg-logo-text { font-size: clamp(18px, 0.6vw, 28px); }
+  .tg-nav-link { font-size: clamp(16px, 0.5vw, 22px); }
+  .tg-theme-toggle { width: 48px; height: 48px; font-size: 22px; }
+  .tg-btn { padding: 18px 40px; font-size: clamp(16px, 0.5vw, 22px); border-width: 3px; }
+  .tg-btn-secondary { padding: 18px 40px; font-size: clamp(16px, 0.5vw, 22px); border-width: 3px; }
+  .tg-btn-outline { padding: 18px 40px; }
+
+  .tg-terminal { border-width: 3px; }
+  .tg-terminal-bar { padding: 14px 20px; }
+  .tg-terminal-body { font-size: clamp(15px, 0.45vw, 20px); padding: 32px 36px; line-height: 1.7; }
+  .tg-terminal-title { font-size: clamp(12px, 0.4vw, 16px); }
+
+  .tg-showcase-grid { gap: 2vw; }
+  .tg-showcase-card { padding: 2vw; border-width: 3px; }
+  .tg-showcase-card h3 { font-size: clamp(18px, 0.6vw, 28px); }
+  .tg-showcase-card p { font-size: clamp(15px, 0.5vw, 22px); line-height: 1.7; }
+
+  .tg-sync-panel { font-size: clamp(14px, 0.45vw, 20px); border-width: 3px; padding: 2vw; }
+  .tg-sync-header { font-size: clamp(12px, 0.38vw, 16px); padding: 12px 2vw; }
+  .tg-sync-item { padding: 10px 2vw; font-size: clamp(14px, 0.45vw, 20px); }
+
+  .tg-encrypt-flow { gap: 3vw; }
+  .tg-encrypt-panel { padding: 2.5vw; min-height: 300px; font-size: clamp(13px, 0.4vw, 18px); border-width: 3px; }
+  .tg-encrypt-panel-title { font-size: clamp(12px, 0.4vw, 16px); }
   .tg-encrypt-middle { padding: 24px; }
-  .tg-encrypt-tagline { font-size: 18px; max-width: 900px; }
-  .tg-cta { padding: 0 clamp(64px, 6vw, 320px); }
-  .tg-cta-headline { font-size: 64px; }
-  .tg-cta-sub { font-size: 22px; max-width: 720px; }
+  .tg-encrypt-tagline { font-size: clamp(16px, 0.5vw, 24px); max-width: 60vw; margin-top: 3vw; }
+
+  .tg-stat-number { font-size: clamp(48px, 1.6vw, 80px); }
+  .tg-stat-label { font-size: clamp(14px, 0.45vw, 20px); }
+  .tg-stat-cell { padding: 3vw 2vw; }
+
+  .tg-cta { padding: 8vh 10vw; min-height: 60vh; }
+  .tg-cta-headline { font-size: clamp(52px, 1.8vw, 96px); }
+  .tg-cta-sub { font-size: clamp(18px, 0.6vw, 28px); max-width: 50vw; }
+
+  .tg-footer { padding: 3vw 10vw; font-size: clamp(14px, 0.45vw, 20px); }
 }
 
 /* ========== NAV ========== */
