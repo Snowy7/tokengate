@@ -2104,13 +2104,23 @@ p {
   .ed1-wrap { min-height: 0; }
 
   .ed1-toolbar {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
     gap: 4px;
-    padding: 4px 8px;
+    padding: 6px 8px;
   }
 
-  .ed1-tabs { flex-wrap: wrap; }
-  .ed1-search { width: 100%; order: 10; }
+  .ed1-toolbar > div:first-child { order: 1; }
+  .ed1-toolbar > div:last-child {
+    order: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  .ed1-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .ed1-search { width: auto; flex: 1; min-width: 80px; }
 
   .ed1-linenum { width: 28px; font-size: 9px; padding: 4px 4px; }
   .ed1-key { font-size: 11px; padding: 4px 6px; flex: 1; }
@@ -2130,13 +2140,38 @@ p {
   .ed-rev-banner > div:last-child { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
 
   .content-header {
-    padding: 0 12px;
-    min-height: 44px;
+    padding: 8px 12px;
+    min-height: auto;
     height: auto;
-    gap: 8px;
+    gap: 4px;
+    flex-wrap: wrap;
   }
 
-  .breadcrumb { font-size: 11px; flex-wrap: wrap; }
+  .breadcrumb {
+    font-size: 11px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .breadcrumb span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .status-bar {
+    flex-shrink: 0;
+  }
+
+  .status-bar .tag {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
 
   .modal { max-width: 100%; margin: 12px; }
   .modal-header { padding: 14px 16px 0; }
