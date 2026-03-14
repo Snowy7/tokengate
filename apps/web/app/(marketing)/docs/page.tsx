@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Sun, Moon, Menu, X } from "lucide-react";
+import { Sun, Moon, Menu, X, Shield } from "lucide-react";
 import Link from "next/link";
 
 const sections = [
@@ -142,7 +142,7 @@ export default function DocsPage() {
   --docs-terminal-dim: #666666;
   --docs-font-mono: 'Space Mono', monospace;
   --docs-font-sans: 'Work Sans', sans-serif;
-  --docs-shadow: 4px 4px 0 #0a0a0a;
+  --docs-shadow: 4px 4px 0 #00a86b;
   --docs-sidebar-width: 260px;
 }
 
@@ -853,7 +853,7 @@ html {
       {/* ===== NAV ===== */}
       <nav className="docs-nav">
         <Link href="/" className="docs-nav-left">
-          <div className="docs-logo-box">TG</div>
+          <div className="docs-logo-box"><Shield size={20} /></div>
           <span className="docs-logo-text">tokengate.dev</span>
         </Link>
         <div className="docs-nav-right">

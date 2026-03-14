@@ -7,6 +7,7 @@ import {
   Sun,
   Moon,
   Lock,
+  Shield,
   ChevronRight,
 } from "lucide-react";
 
@@ -68,11 +69,37 @@ const THEME_VARS = `
   100% { opacity: 0.2; }
 }
 
+/* Brutalist button hover — CSS only, no JS needed */
+.tg-brutal-btn {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  box-shadow: none;
+}
+.tg-brutal-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--tg-shadow);
+}
+.tg-brutal-btn:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+/* Brutalist link hover */
+.tg-brutal-link {
+  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.tg-brutal-link:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--tg-border);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tg-cursor, .tg-fade-in, .tg-status-dot, .tg-dot {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+  .tg-brutal-btn, .tg-brutal-link {
+    transition: none !important;
   }
 }
 `;
@@ -218,11 +245,8 @@ export default function MarketingPage() {
       {/* ===== NAV ===== */}
       <nav className="sticky top-0 z-50 flex items-center justify-between h-[clamp(56px,3.5vw,96px)] px-[clamp(24px,3vw,200px)] border-b-3 border-[var(--tg-border)]" style={{ background: "var(--tg-bg)" }}>
         <div className="flex items-center gap-3">
-          <div
-            className="flex items-center justify-center w-10 h-10 bg-[var(--tg-green)] border-3 border-[var(--tg-border)] text-black text-base font-bold"
-            style={mono}
-          >
-            TG
+          <div className="flex items-center justify-center w-10 h-10 bg-[var(--tg-green)] border-3 border-[var(--tg-border)] text-black">
+            <Shield size={20} />
           </div>
           <span className="font-bold text-base tracking-tight" style={mono}>
             tokengate.dev
@@ -230,7 +254,7 @@ export default function MarketingPage() {
         </div>
         <div className="flex items-center gap-4">
           <button
-            className="flex items-center justify-center w-10 h-10 border-3 border-[var(--tg-border)] cursor-pointer transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
+            className="tg-brutal-btn flex items-center justify-center w-10 h-10 border-3 border-[var(--tg-border)] cursor-pointer"
             style={{ background: "var(--tg-bg)", color: "var(--tg-text)" }}
             onClick={toggleTheme}
             aria-label="Toggle dark mode"
@@ -239,7 +263,7 @@ export default function MarketingPage() {
           </button>
           <Link
             href="/docs"
-            className="hidden md:inline-block text-[clamp(12px,0.5vw,22px)] font-bold uppercase tracking-wider py-2 px-3 border-3 border-transparent transition-colors duration-150 no-underline hover:border-[var(--tg-border)]"
+            className="tg-brutal-link hidden md:inline-block text-[clamp(12px,0.5vw,22px)] font-bold uppercase tracking-wider py-2 px-3 border-3 border-transparent no-underline hover:border-[var(--tg-border)]"
             style={{ ...mono, color: "var(--tg-text)" }}
           >
             Docs
@@ -247,10 +271,8 @@ export default function MarketingPage() {
           <SignedOut>
             <SignInButton mode="modal">
               <button
-                className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
-                style={{ ...mono, boxShadow: "none" }}
-                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "var(--tg-shadow)")}
-                onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}
+                className="tg-brutal-btn inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline"
+                style={mono}
               >
                 Sign In
               </button>
@@ -258,7 +280,7 @@ export default function MarketingPage() {
           </SignedOut>
           <SignedIn>
             <Link
-              className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
+              className="tg-brutal-btn inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline"
               style={mono}
               href="/dashboard"
             >
@@ -293,7 +315,7 @@ export default function MarketingPage() {
             <SignedOut>
               <SignInButton mode="modal">
                 <button
-                  className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline tg-brutal-btn"
                   style={mono}
                 >
                   Get Started
@@ -302,7 +324,7 @@ export default function MarketingPage() {
             </SignedOut>
             <SignedIn>
               <Link
-                className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-[var(--tg-green)] text-black border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline tg-brutal-btn"
                 style={mono}
                 href="/dashboard"
               >
@@ -311,7 +333,7 @@ export default function MarketingPage() {
             </SignedIn>
             <Link
               href="/docs"
-              className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] border-3 border-[var(--tg-border)] font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline tg-brutal-btn"
               style={{ ...mono, background: "var(--tg-bg)", color: "var(--tg-text)" }}
             >
               Read Docs
@@ -759,7 +781,7 @@ N2qTbA0WvO4eHiRk7jG6lSfQw`}</pre>
           <SignedOut>
             <SignInButton mode="modal">
               <button
-                className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-black text-[var(--tg-green)] border-3 border-black font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_rgba(0,0,0,0.3)]"
+                className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-black text-[var(--tg-green)] border-3 border-black font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline tg-brutal-btn"
                 style={mono}
               >
                 Create Account
@@ -768,7 +790,7 @@ N2qTbA0WvO4eHiRk7jG6lSfQw`}</pre>
           </SignedOut>
           <SignedIn>
             <Link
-              className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-black text-[var(--tg-green)] border-3 border-black font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_rgba(0,0,0,0.3)]"
+              className="inline-flex items-center justify-center py-[clamp(8px,0.6vw,20px)] px-[clamp(16px,1.2vw,44px)] bg-black text-[var(--tg-green)] border-3 border-black font-bold text-[clamp(12px,0.5vw,22px)] uppercase tracking-wider cursor-pointer no-underline tg-brutal-btn"
               style={mono}
               href="/dashboard"
             >
