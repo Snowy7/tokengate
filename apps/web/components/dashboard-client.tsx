@@ -142,6 +142,32 @@ function IconFile({ size = 16 }: { size?: number }) {
   );
 }
 
+function IconCloud({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z" /></svg>
+  );
+}
+
+function IconConvex({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--sidebar-accent)" strokeWidth="2"><path d="M12 2L2 7v10l10 5 10-5V7L12 2z" /><path d="M12 22V12" /><path d="M2 7l10 5 10-5" /></svg>
+  );
+}
+
+function IconVercel({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2z" /></svg>
+  );
+}
+
+function FileSourceIcon({ source, size = 10 }: { source?: string; size?: number }) {
+  switch (source) {
+    case "convex": return <IconConvex size={size} />;
+    case "vercel": return <IconVercel size={size} />;
+    default: return <IconCloud size={size} />;
+  }
+}
+
 function IconEye({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -317,7 +343,7 @@ function RevisionDiff({ oldEntries, newEntries, oldLabel, newLabel }: {
 }
 
 type ModalKind = "workspace" | "project" | "environment" | "invite" | null;
-type ActiveView = "secrets" | "settings";
+type ActiveView = "secrets" | "settings" | "schemas" | "integrations";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -975,16 +1001,20 @@ export function DashboardClient() {
                             {/* File list under selected environment */}
                             {isSelected && secretSets.length > 0 && (
                               <div className="sidebar-tree-children">
-                                {secretSets.map((ss) => (
-                                  <button
-                                    key={ss.id}
-                                    className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""} text-xs py-[3px] px-2`}
-                                    onClick={() => selectSecretSet(ss.id)}
-                                  >
-                                    <IconFile size={11} />
-                                    <span className="text-[11px]" style={{ fontFamily: "var(--font-mono)" }}>{ss.filePath || ".env"}</span>
-                                  </button>
-                                ))}
+                                {secretSets.map((ss) => {
+                                  const fileMeta = meta?.files.find((f: { secretSetId: string }) => f.secretSetId === ss.id);
+                                  return (
+                                    <button
+                                      key={ss.id}
+                                      className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""} text-xs py-[3px] px-2`}
+                                      onClick={() => selectSecretSet(ss.id)}
+                                    >
+                                      <FileSourceIcon source={(fileMeta as { source?: string } | undefined)?.source} size={10} />
+                                      <span className="text-[11px]" style={{ fontFamily: "var(--font-mono)" }}>{ss.filePath || ".env"}</span>
+                                      {(fileMeta as { hasSchema?: boolean } | undefined)?.hasSchema && <span className="ml-auto text-[8px] opacity-60 uppercase tracking-wider" style={{ fontFamily: "var(--font-mono)" }}>S</span>}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -1008,13 +1038,29 @@ export function DashboardClient() {
         <div className="mt-auto">
           <div className="divider" />
           {selectedWorkspaceId && (
-            <button
-              className={`sidebar-item${activeView === "settings" ? " active" : ""} m-[4px_10px] w-[calc(100%-20px)]`}
-              onClick={() => setActiveView(activeView === "settings" ? "secrets" : "settings")}
-            >
-              <IconSettings size={14} />
-              <span>Workspace settings</span>
-            </button>
+            <>
+              <button
+                className={`sidebar-item${activeView === "schemas" ? " active" : ""} m-[4px_10px] w-[calc(100%-20px)]`}
+                onClick={() => setActiveView(activeView === "schemas" ? "secrets" : "schemas")}
+              >
+                <IconFile size={14} />
+                <span>File schemas</span>
+              </button>
+              <button
+                className={`sidebar-item${activeView === "integrations" ? " active" : ""} m-[4px_10px] w-[calc(100%-20px)]`}
+                onClick={() => setActiveView(activeView === "integrations" ? "secrets" : "integrations")}
+              >
+                <IconLayers size={14} />
+                <span>Integrations</span>
+              </button>
+              <button
+                className={`sidebar-item${activeView === "settings" ? " active" : ""} m-[4px_10px] w-[calc(100%-20px)]`}
+                onClick={() => setActiveView(activeView === "settings" ? "secrets" : "settings")}
+              >
+                <IconSettings size={14} />
+                <span>Settings</span>
+              </button>
+            </>
           )}
           <div className="pt-2 px-[18px] pb-3 border-t border-[var(--sidebar-border)] flex items-center gap-[10px]">
             <UserButton appearance={{ elements: { avatarBox: { width: 28, height: 28 } } }} />
@@ -1033,6 +1079,8 @@ export function DashboardClient() {
               <>
                 <span>{selectedWorkspace.name}</span>
                 {activeView === "settings" && <><IconChevron size={12} /><span>Settings</span></>}
+                {activeView === "schemas" && <><IconChevron size={12} /><span>File Schemas</span></>}
+                {activeView === "integrations" && <><IconChevron size={12} /><span>Integrations</span></>}
                 {activeView === "secrets" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
                 {activeView === "secrets" && selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
                 {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><span className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>{selectedSecretSet.filePath || ".env"}</span></>}
@@ -1159,6 +1207,99 @@ export function DashboardClient() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* SCHEMAS VIEW */}
+        {activeView === "schemas" && selectedWorkspace && selectedProject && (
+          <div className="fade-in p-6 flex flex-col gap-6">
+            <div className="panel p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="flex items-center gap-2"><IconFile size={16} /> File Schemas</h3>
+              </div>
+              <p className="muted text-sm mb-4">
+                Define the variables each file should contain. Schemas are shared across all environments — every environment will have the same keys, with different values.
+              </p>
+
+              {/* Schema list - loaded via API */}
+              <div className="members-list">
+                <div className="member-row flex items-center gap-3 py-3">
+                  <span className="muted text-xs">Schemas are managed per file path at the project level. Use the API or CLI to create schemas.</span>
+                </div>
+                <div className="member-row">
+                  <div className="flex-1 min-w-0">
+                    <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>POST /api/schemas</code>
+                  </div>
+                  <span className="muted text-xs">Create/update a schema</span>
+                </div>
+                <div className="member-row">
+                  <div className="flex-1 min-w-0">
+                    <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>tokengate generate-types</code>
+                  </div>
+                  <span className="muted text-xs">Generate TypeScript types from config</span>
+                </div>
+              </div>
+
+              <div className="docs-info mt-4" style={{ border: "3px solid var(--accent)", background: "var(--accent-subtle)" }}>
+                <p className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>
+                  Create a <strong>tokengate.config.ts</strong> in your project root to define schemas.
+                  Run <strong>tokengate generate-types</strong> to generate TypeScript types and .env.example.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* INTEGRATIONS VIEW */}
+        {activeView === "integrations" && selectedWorkspace && selectedProject && (
+          <div className="fade-in p-6 flex flex-col gap-6">
+            <div className="panel p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="flex items-center gap-2"><IconLayers size={16} /> Integrations</h3>
+              </div>
+              <p className="muted text-sm mb-4">
+                Connect external services to sync environment variables. Credentials are encrypted with your workspace key.
+              </p>
+
+              <div className="flex flex-col gap-3">
+                {/* Convex */}
+                <div className="panel p-4 flex items-start gap-4">
+                  <div className="w-10 h-10 flex items-center justify-center border-3 border-[var(--border)] bg-[var(--surface-hover)]">
+                    <IconConvex size={20} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm">Convex</div>
+                    <p className="muted text-xs mt-1">Sync environment variables with your Convex deployment. Provide your deploy key and deployment URL.</p>
+                    <div className="mt-2">
+                      <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>POST /api/integrations</code>
+                      <span className="muted text-xs ml-2">provider: "convex"</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vercel */}
+                <div className="panel p-4 flex items-start gap-4">
+                  <div className="w-10 h-10 flex items-center justify-center border-3 border-[var(--border)] bg-[var(--surface-hover)]">
+                    <IconVercel size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm">Vercel</div>
+                    <p className="muted text-xs mt-1">Sync environment variables with your Vercel project. Supports production, preview, and development targets.</p>
+                    <div className="mt-2">
+                      <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>POST /api/integrations</code>
+                      <span className="muted text-xs ml-2">provider: "vercel"</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="docs-info mt-4" style={{ border: "3px solid var(--accent)", background: "var(--accent-subtle)" }}>
+                <p className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>
+                  Integrations are managed via the API. Use <strong>tokengate sync --provider convex</strong> from the CLI,
+                  or call the <strong>/api/integrations</strong> endpoints.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

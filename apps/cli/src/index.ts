@@ -174,6 +174,8 @@ async function main(cmd: string | undefined, argv: string[]) {
       return handleGenerateTypes();
     case "scan":
       return handleScan();
+    case "sync":
+      return handleSync(argv);
     case "help":
     case "--help":
     case "-h":
@@ -2006,6 +2008,85 @@ async function handleScan() {
   p.outro(`${results.length} leak${results.length !== 1 ? "s" : ""} found`);
 }
 
+// ---------------------------------------------------------------------------
+// Sync with external providers
+// ---------------------------------------------------------------------------
+
+async function handleSync(argv: string[]) {
+  p.intro(`${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim("sync")}`);
+
+  const local = loadLocalConfig();
+  if (!local) {
+    p.log.error(`No ${LOCAL_CONFIG_FILE} found. Run ${pc.cyan("tokengate init")} first.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = await requireAuth();
+
+  // Parse flags
+  let provider = "";
+  let direction = "pull";
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--provider" && argv[i + 1]) provider = argv[++i];
+    if (argv[i] === "--direction" && argv[i + 1]) direction = argv[++i];
+  }
+
+  if (!provider) {
+    const choice = await p.select({
+      message: "Which provider?",
+      options: [
+        { value: "convex", label: "Convex" },
+        { value: "vercel", label: "Vercel" },
+      ],
+    });
+    bail(choice);
+    provider = choice as string;
+  }
+
+  if (!["pull", "push"].includes(direction)) {
+    const choice = await p.select({
+      message: "Direction?",
+      options: [
+        { value: "pull", label: "Pull from provider into Tokengate" },
+        { value: "push", label: "Push from Tokengate to provider" },
+      ],
+    });
+    bail(choice);
+    direction = choice as string;
+  }
+
+  const spinner = p.spinner();
+  spinner.start(`Syncing with ${pc.cyan(provider)} (${direction})`);
+
+  try {
+    // Call the sync API
+    const apiUrl = config.appUrl || "https://tokengate.dev";
+
+    // We need the integration ID — for now, list integrations and find the matching provider
+    // This would normally go through /api/integrations, but the CLI uses Convex directly
+    // For a first pass, just show the user what they'd need to do
+    spinner.stop("Ready.");
+
+    p.log.info(`To sync with ${pc.cyan(provider)}:`);
+    p.log.message("");
+    p.log.message(`  1. Add an integration in the dashboard (${pc.cyan("Integrations")} tab)`);
+    p.log.message(`  2. Provide your ${provider === "convex" ? "deploy key + deployment URL" : "Vercel token + project ID"}`);
+    p.log.message(`  3. Map provider environments to Tokengate environments`);
+    p.log.message(`  4. Use the sync button or API:`);
+    p.log.message("");
+    p.log.message(`     ${pc.dim("POST")} ${pc.cyan(`${apiUrl}/api/integrations/{id}/sync`)}`);
+    p.log.message(`     ${pc.dim("Body:")} ${pc.cyan(`{ "direction": "${direction}" }`)}`);
+    p.log.message("");
+
+    p.outro("Set up the integration in the dashboard first.");
+  } catch (err) {
+    spinner.stop("Error.");
+    p.log.error(err instanceof Error ? err.message : "Sync failed.");
+    process.exitCode = 1;
+  }
+}
+
 function printHelp() {
   p.intro(`${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim("CLI")}`);
 
@@ -2025,6 +2106,7 @@ function printHelp() {
     ${pc.cyan("history")}            Show revision history
     ${pc.cyan("generate-types")}     Generate TypeScript types from tokengate.config.ts
     ${pc.cyan("scan")}               Scan codebase for leaked secrets
+    ${pc.cyan("sync")}               Sync with external providers (Convex, Vercel)
 
   ${pc.bold("How it works")}
     1. Run ${pc.cyan("tokengate init")} in your project root

@@ -43,13 +43,42 @@ export const load = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId!))
       .collect();
 
-    // 4. All environments across all projects, with metadata
+    // 4. Load file schemas and integrations for this workspace's projects
+    const allSchemas = await Promise.all(
+      projects.map((p) =>
+        ctx.db.query("fileSchemas").withIndex("by_project", (q) => q.eq("projectId", p._id)).collect()
+      )
+    );
+    const schemasByProject = new Map(projects.map((p, i) => [p._id, allSchemas[i]]));
+
+    const allIntegrations = await Promise.all(
+      projects.map((p) =>
+        ctx.db.query("integrations").withIndex("by_project", (q) => q.eq("projectId", p._id)).collect()
+      )
+    );
+    const integrationsByProject = new Map(projects.map((p, i) => [p._id, allIntegrations[i]]));
+
+    // 5. All environments across all projects, with metadata
     const environments = await Promise.all(
       projects.map(async (project) => {
         const envs = await ctx.db
           .query("environments")
           .withIndex("by_project", (q) => q.eq("projectId", project._id))
           .collect();
+
+        const projectSchemas = schemasByProject.get(project._id) ?? [];
+        const projectIntegrations = integrationsByProject.get(project._id) ?? [];
+
+        // Build a map of filePath → source from integrations
+        const sourceByFilePath = new Map<string, string>();
+        for (const integ of projectIntegrations) {
+          for (const mapping of integ.environmentMappings) {
+            sourceByFilePath.set(`${mapping.environmentId}:${mapping.filePath}`, integ.provider);
+          }
+        }
+
+        // Build a set of filePaths that have schemas
+        const schemaFilePaths = new Set(projectSchemas.map((s) => s.filePath));
 
         const envsWithMeta = await Promise.all(
           envs.map(async (env) => {
@@ -63,6 +92,8 @@ export const load = query({
               secretSetId: string;
               filePath: string | null;
               latestRevision: number | null;
+              hasSchema: boolean;
+              source: string;
             }> = [];
 
             for (const ss of secretSets) {
@@ -79,10 +110,14 @@ export const load = query({
                   }
                 }
               }
+
+              const fp = ss.filePath ?? ".env";
               files.push({
                 secretSetId: ss._id,
                 filePath: ss.filePath ?? null,
                 latestRevision: ss.latestRevision ?? null,
+                hasSchema: schemaFilePaths.has(fp),
+                source: sourceByFilePath.get(`${env._id}:${fp}`) ?? "tokengate",
               });
             }
 
