@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Sun, Moon, Menu, X } from "lucide-react";
 import Link from "next/link";
 
 const sections = [
@@ -78,15 +79,24 @@ function Bold({ children }: { children: React.ReactNode }) {
 }
 
 export default function DocsPage() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const [activeSection, setActiveSection] = useState("getting-started");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setDark(true);
+    const stored = localStorage.getItem("tg-theme");
+    if (stored) {
+      setDark(stored === "dark");
+    } else {
+      setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
     }
   }, []);
+
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    localStorage.setItem("tg-theme", next ? "dark" : "light");
+  };
 
   const handleScroll = useCallback(() => {
     const offsets = sections.map((s) => {
@@ -114,16 +124,16 @@ export default function DocsPage() {
 
 /* ========== DOCS VARIABLES ========== */
 .docs-root {
-  --docs-bg: #ffffff;
-  --docs-bg-alt: #f5f5f0;
-  --docs-surface: #ffffff;
-  --docs-text: #0a0a0a;
-  --docs-text-secondary: #555555;
+  --docs-bg: #faf9f6;
+  --docs-bg-alt: #f0efeb;
+  --docs-surface: #faf9f6;
+  --docs-text: #1a1a1a;
+  --docs-text-secondary: #5a5a5a;
   --docs-green: #00a86b;
-  --docs-green-dim: rgba(0, 168, 107, 0.12);
-  --docs-border: #0a0a0a;
-  --docs-border-light: #e0e0e0;
-  --docs-terminal-bg: #0a0a0a;
+  --docs-green-dim: rgba(0, 168, 107, 0.10);
+  --docs-border: #00a86b;
+  --docs-border-light: #ddd8d0;
+  --docs-terminal-bg: #1a1f1c;
   --docs-terminal-text: #d4d4d4;
   --docs-terminal-green: #00d68f;
   --docs-terminal-yellow: #fbbf24;
@@ -137,17 +147,17 @@ export default function DocsPage() {
 }
 
 .docs-root[data-theme="dark"] {
-  --docs-bg: #0a0e0c;
-  --docs-bg-alt: #0f1412;
-  --docs-surface: #131a17;
+  --docs-bg: #0f1412;
+  --docs-bg-alt: #141a17;
+  --docs-surface: #182019;
   --docs-text: #e8e8e8;
   --docs-text-secondary: #999999;
   --docs-green: #00d68f;
-  --docs-green-dim: rgba(0, 214, 143, 0.12);
-  --docs-border: #e8e8e8;
-  --docs-border-light: #2a2a2a;
-  --docs-terminal-bg: #111111;
-  --docs-shadow: 4px 4px 0 #00d68f;
+  --docs-green-dim: rgba(0, 214, 143, 0.10);
+  --docs-border: #00d68f;
+  --docs-border-light: #1e2a24;
+  --docs-terminal-bg: #0d100e;
+  --docs-shadow: 4px 4px 0 rgba(0, 214, 143, 0.4);
 }
 
 /* ========== BASE ========== */
@@ -470,8 +480,8 @@ export default function DocsPage() {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: #1a1a1a;
-  border-bottom: 2px solid #333;
+  background: #1a201d;
+  border-bottom: 2px solid rgba(0, 168, 107, 0.2);
 }
 
 .docs-terminal-dot {
@@ -849,10 +859,10 @@ html {
         <div className="docs-nav-right">
           <button
             className="docs-theme-toggle"
-            onClick={() => setDark(!dark)}
+            onClick={toggleTheme}
             aria-label="Toggle dark mode"
           >
-            {dark ? "\u2600" : "\u263E"}
+            {dark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           <Link href="/" className="docs-nav-link">
             Home
@@ -2000,7 +2010,7 @@ html {
         onClick={() => setMobileNavOpen(!mobileNavOpen)}
         aria-label="Toggle navigation"
       >
-        {mobileNavOpen ? "\u2715" : "\u2630"}
+        {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* ===== MOBILE SIDEBAR ===== */}
@@ -2035,7 +2045,7 @@ html {
 
       {/* ===== FOOTER ===== */}
       <footer className="docs-footer">
-        <span>&copy; 2025 tokengate.dev</span>
+        <span>&copy; {new Date().getFullYear()} tokengate.dev</span>
         <div className="docs-footer-links">
           <Link href="/">Home</Link>
           <a
