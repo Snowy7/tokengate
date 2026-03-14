@@ -48,7 +48,7 @@ jobs:
           fi
 
       - if: steps.check.outputs.skip == 'false'
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Build
         if: steps.check.outputs.skip == 'false'
@@ -100,7 +100,7 @@ jobs:
           fi
 
       - if: steps.check.outputs.skip == 'false'
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Run tests
         if: steps.check.outputs.skip == 'false'
@@ -166,7 +166,7 @@ jobs:
           fi
 
       - if: steps.check.outputs.skip == 'false'
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Build chain
         if: steps.check.outputs.skip == 'false'
