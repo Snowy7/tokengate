@@ -13,96 +13,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/* ------------------------------------------------------------------ */
-/*  CSS custom properties injected once via a tiny <style> block       */
-/*  This is NOT inline styling — it sets theme tokens for Tailwind     */
-/* ------------------------------------------------------------------ */
-const THEME_VARS = `
-.tg-root {
-  --tg-green: #00a86b;
-  --tg-green-dim: rgba(0, 168, 107, 0.10);
-  --tg-bg: #faf9f6;
-  --tg-bg-alt: #f0efeb;
-  --tg-surface: #faf9f6;
-  --tg-text: #1a1a1a;
-  --tg-text-secondary: #5a5a5a;
-  --tg-border: #2a2a2a;
-  --tg-terminal-bg: #1a1f1c;
-  --tg-terminal-text: #d4d4d4;
-  --tg-terminal-green: #00d68f;
-  --tg-terminal-yellow: #fbbf24;
-  --tg-terminal-blue: #60a5fa;
-  --tg-terminal-red: #f87171;
-  --tg-terminal-dim: #666666;
-  --tg-shadow: 4px 4px 0 #2a2a2a;
-  --tg-hover-shadow: 6px 6px 0 #2a2a2a;
-}
-html[data-theme="dark"] .tg-root {
-  --tg-green: #00d68f;
-  --tg-green-dim: rgba(0, 214, 143, 0.10);
-  --tg-bg: #0f1412;
-  --tg-bg-alt: #141a17;
-  --tg-surface: #182019;
-  --tg-text: #e8e8e8;
-  --tg-text-secondary: #999999;
-  --tg-border: #00d68f;
-  --tg-terminal-bg: #0d100e;
-  --tg-shadow: 4px 4px 0 rgba(0, 214, 143, 0.4);
-  --tg-hover-shadow: 6px 6px 0 rgba(0, 214, 143, 0.5);
-}
-
-@keyframes tg-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-@keyframes tg-fade-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes tg-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-@keyframes tg-dot-flow {
-  0% { opacity: 0.2; }
-  50% { opacity: 1; }
-  100% { opacity: 0.2; }
-}
-
-/* Brutalist button hover — CSS only, no JS needed */
-.tg-brutal-btn {
-  transition: transform 150ms ease, box-shadow 150ms ease;
-  box-shadow: none;
-}
-.tg-brutal-btn:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--tg-shadow);
-}
-.tg-brutal-btn:active {
-  transform: translate(0, 0);
-  box-shadow: none;
-}
-
-/* Brutalist link hover */
-.tg-brutal-link {
-  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
-}
-.tg-brutal-link:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--tg-border);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tg-cursor, .tg-fade-in, .tg-status-dot, .tg-dot {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-  .tg-brutal-btn, .tg-brutal-link {
-    transition: none !important;
-  }
-}
-`;
+/* Theme vars, animations, and brutalist classes are in globals.css */
 
 /* ------------------------------------------------------------------ */
 /*  Shared sub-components                                              */
@@ -237,8 +148,7 @@ export default function MarketingPage() {
       className="tg-root min-h-screen overflow-x-hidden antialiased"
       style={{ background: "var(--tg-bg)", color: "var(--tg-text)", ...sans }}
     >
-      {/* Theme tokens — not inline styles, just CSS custom properties */}
-      <style dangerouslySetInnerHTML={{ __html: THEME_VARS }} />
+      {/* Theme tokens are in globals.css */}
 
       {/* ===== NAV ===== */}
       <nav className="sticky top-0 z-50 flex items-center justify-between h-[clamp(56px,3.5vw,96px)] px-[clamp(24px,3vw,200px)] border-b-3 border-[var(--tg-border)]" style={{ background: "var(--tg-bg)" }}>
