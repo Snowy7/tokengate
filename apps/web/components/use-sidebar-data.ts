@@ -200,26 +200,33 @@ export function useSidebarData() {
   const loadSidebar = useCallback(async (workspaceId?: string) => {
     dispatch({ type: "LOADING", key: "sidebar", value: true });
     try {
-      const url = workspaceId ? `/api/sidebar?workspaceId=${workspaceId}` : "/api/sidebar";
-      const data = await fetchJson<SidebarData>(url);
+      // Step 1: If no workspaceId, fetch workspaces first to pick one
+      let resolvedWsId = workspaceId;
+      if (!resolvedWsId) {
+        const initial = await fetchJson<SidebarData>("/api/sidebar");
+        resolvedWsId = initial.workspaces.find((w) => w.workspace?.id === state.selectedWorkspaceId)?.workspace?.id
+          ?? initial.workspaces[0]?.workspace?.id;
 
-      // Auto-select: prefer current selections if still valid
-      const wsId = workspaceId
-        ?? data.workspaces.find((w) => w.workspace?.id === state.selectedWorkspaceId)?.workspace?.id
-        ?? data.workspaces[0]?.workspace?.id
-        ?? "";
+        if (!resolvedWsId) {
+          // No workspaces at all
+          dispatch({ type: "SIDEBAR_LOADED", data: initial, selectedWorkspaceId: "", selectedProjectId: "", selectedEnvironmentId: "" });
+          return;
+        }
+      }
+
+      // Step 2: Fetch with workspace to get projects + environments
+      const data = await fetchJson<SidebarData>(`/api/sidebar?workspaceId=${resolvedWsId}`);
 
       const pId = data.projects.find((p) => p.id === state.selectedProjectId)?.id
         ?? data.projects[0]?.id
         ?? "";
 
-      // Find environments for the auto-selected project
       const projectEnvs = data.environments.filter((em) => em.environment.projectId === pId);
       const eId = projectEnvs.find((em) => em.environment.id === state.selectedEnvironmentId)?.environment.id
         ?? projectEnvs[0]?.environment.id
         ?? "";
 
-      dispatch({ type: "SIDEBAR_LOADED", data, selectedWorkspaceId: wsId, selectedProjectId: pId, selectedEnvironmentId: eId });
+      dispatch({ type: "SIDEBAR_LOADED", data, selectedWorkspaceId: resolvedWsId, selectedProjectId: pId, selectedEnvironmentId: eId });
     } catch {
       dispatch({ type: "LOADING", key: "sidebar", value: false });
     }
@@ -265,19 +272,28 @@ export function useSidebarData() {
   }, []);
 
   // --- Initial load ---
-  useEffect(() => { void loadSidebar(); }, [loadSidebar]);
+  useEffect(() => {
+    void loadSidebar().then(() => {
+      // Mark initial workspace as "seen" after load completes
+      // so the change effect below doesn't re-fetch it
+      prevWorkspaceId.current = "___initialized___";
+    });
+  }, [loadSidebar]);
 
   // --- Reload when workspace selection changes (user picks different workspace) ---
   useEffect(() => {
     const wsId = state.selectedWorkspaceId;
-    if (prevWorkspaceId.current === null) {
-      // First render — already loaded by initial loadSidebar
+    if (!wsId) return;
+    // Skip until initial load is done
+    if (prevWorkspaceId.current === null) return;
+    if (prevWorkspaceId.current === "___initialized___") {
+      // First real workspace ID from initial load — don't refetch, just record it
       prevWorkspaceId.current = wsId;
       return;
     }
     if (wsId === prevWorkspaceId.current) return;
     prevWorkspaceId.current = wsId;
-    if (wsId) void loadSidebar(wsId);
+    void loadSidebar(wsId);
   }, [state.selectedWorkspaceId, loadSidebar]);
 
   // --- Load secret sets when environment changes ---

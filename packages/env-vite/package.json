@@ -1,6 +1,6 @@
 {
   "name": "@tokengate/env-vite",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tokengate environment variable integration for Vite",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,6 +39,6 @@
     "vite": ">=5.0.0"
   },
   "dependencies": {
-    "@tokengate/env": "^0.1.0"
+    "@tokengate/env": "^0.2.0"
   }
 }
