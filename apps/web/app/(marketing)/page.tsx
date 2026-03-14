@@ -127,15 +127,19 @@ export default function MarketingPage() {
 
 /* 1440p+ */
 @media (min-width: 1440px) {
-  .tg-hero, .tg-section, .tg-encrypt-section,
-  .tg-cta, .tg-footer { max-width: 1400px; }
+  /* Content sections with margin: auto — constrain width */
+  .tg-hero, .tg-section { max-width: 1400px; }
+  /* Full-width sections (have bg color) — scale inner content instead */
+  .tg-encrypt-section, .tg-cta, .tg-stats { max-width: none; }
+  .tg-encrypt-inner { max-width: 1400px; }
+  .tg-footer { max-width: none; }
   .tg-nav { max-width: none; padding: 0 clamp(32px, 4vw, 120px); }
 
   .tg-hero { min-height: calc(100vh - 64px); padding: 100px 40px 80px; gap: 48px; }
   .tg-hero-headline { font-size: 68px; }
   .tg-hero-sub { font-size: 18px; max-width: 500px; }
   .tg-section { padding: 80px 40px; min-height: 70vh; display: flex; flex-direction: column; justify-content: center; }
-  .tg-encrypt-section { padding: 80px 40px; min-height: 70vh; display: flex; flex-direction: column; justify-content: center; }
+  .tg-encrypt-section { padding: 80px 40px; min-height: 70vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
   .tg-section-title { font-size: 30px; }
   .tg-nav { height: 64px; }
   .tg-nav-link { font-size: 15px; }
@@ -143,18 +147,18 @@ export default function MarketingPage() {
   .tg-btn-secondary { padding: 12px 24px; font-size: 15px; }
   .tg-stat-number { font-size: 36px; }
   .tg-stat-label { font-size: 13px; }
-  .tg-footer { font-size: 14px; padding: 32px 40px; }
+  .tg-footer { padding: 32px clamp(32px, 4vw, 120px); font-size: 14px; }
   .tg-showcase-card { padding: 24px; }
   .tg-showcase-card h3 { font-size: 16px; }
   .tg-showcase-card p { font-size: 14px; }
   .tg-terminal-body { font-size: 14px; padding: 24px; }
-  .tg-cta { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .tg-cta { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px clamp(32px, 4vw, 120px); }
 }
 
 /* 2K (1920px+) */
 @media (min-width: 1920px) {
-  .tg-hero, .tg-section, .tg-encrypt-section,
-  .tg-cta, .tg-footer { max-width: 1600px; }
+  .tg-hero, .tg-section { max-width: 1600px; }
+  .tg-encrypt-inner { max-width: 1600px; }
   .tg-nav { padding: 0 clamp(48px, 5vw, 200px); }
 
   .tg-hero { padding: 0 48px; min-height: calc(100vh - 72px); }
@@ -172,22 +176,25 @@ export default function MarketingPage() {
   .tg-stat-number { font-size: 48px; }
   .tg-stat-label { font-size: 15px; }
   .tg-stat-cell { padding: 36px 28px; }
-  .tg-footer { font-size: 15px; padding: 40px 48px; }
+  .tg-footer { padding: 40px clamp(48px, 5vw, 200px); font-size: 15px; }
   .tg-showcase-grid { gap: 28px; }
   .tg-showcase-card { padding: 28px; }
   .tg-showcase-card h3 { font-size: 18px; }
   .tg-showcase-card p { font-size: 16px; line-height: 1.7; }
   .tg-terminal-body { font-size: 15px; padding: 28px; }
   .tg-sync-panel { font-size: 15px; }
-  .tg-cta { padding: 0 48px; }
+  .tg-encrypt-flow { gap: 24px; }
+  .tg-encrypt-panel { padding: 32px; min-height: 280px; font-size: 14px; }
+  .tg-encrypt-tagline { font-size: 16px; max-width: 720px; }
+  .tg-cta { padding: 0 clamp(48px, 5vw, 200px); }
   .tg-cta-headline { font-size: 52px; }
-  .tg-cta-sub { font-size: 19px; }
+  .tg-cta-sub { font-size: 19px; max-width: 600px; }
 }
 
 /* 4K (2560px+) */
 @media (min-width: 2560px) {
-  .tg-hero, .tg-section, .tg-encrypt-section,
-  .tg-cta, .tg-footer { max-width: 2200px; }
+  .tg-hero, .tg-section { max-width: 2200px; }
+  .tg-encrypt-inner { max-width: 2200px; }
   .tg-nav { padding: 0 clamp(64px, 6vw, 320px); }
 
   .tg-hero { padding: 0 80px; min-height: calc(100vh - 80px); gap: 80px; }
@@ -206,16 +213,20 @@ export default function MarketingPage() {
   .tg-stat-number { font-size: 56px; }
   .tg-stat-label { font-size: 17px; }
   .tg-stat-cell { padding: 48px 36px; }
-  .tg-footer { font-size: 17px; padding: 48px 80px; }
+  .tg-footer { padding: 48px clamp(64px, 6vw, 320px); font-size: 17px; }
   .tg-showcase-grid { gap: 36px; }
   .tg-showcase-card { padding: 36px; border-width: 3px; }
   .tg-showcase-card h3 { font-size: 22px; }
   .tg-showcase-card p { font-size: 18px; line-height: 1.7; }
   .tg-terminal-body { font-size: 17px; padding: 36px; }
   .tg-sync-panel { font-size: 17px; border-width: 3px; }
-  .tg-cta { padding: 0 80px; }
+  .tg-encrypt-flow { gap: 40px; }
+  .tg-encrypt-panel { padding: 40px; min-height: 340px; font-size: 16px; }
+  .tg-encrypt-middle { padding: 24px; }
+  .tg-encrypt-tagline { font-size: 18px; max-width: 900px; }
+  .tg-cta { padding: 0 clamp(64px, 6vw, 320px); }
   .tg-cta-headline { font-size: 64px; }
-  .tg-cta-sub { font-size: 22px; }
+  .tg-cta-sub { font-size: 22px; max-width: 720px; }
 }
 
 /* ========== NAV ========== */
