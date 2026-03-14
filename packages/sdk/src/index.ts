@@ -203,10 +203,52 @@ export interface EnvironmentWithSecretSet {
   secretSet: SecretSet | null;
 }
 
+export interface SchemaField {
+  name: string;
+  type: string;
+  required: boolean;
+  sensitive: boolean;
+  defaultValue?: string;
+  description?: string;
+  enumValues?: string[];
+}
+
+export interface FileSchema {
+  id: string;
+  projectId: string;
+  filePath: string;
+  fields: SchemaField[];
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Integration {
+  id: string;
+  projectId: string;
+  provider: string;
+  label?: string;
+  config: {
+    deploymentUrl?: string;
+    vercelProjectId?: string;
+    wrappedCredential: string;
+  };
+  environmentMappings: Array<{
+    providerTarget: string;
+    environmentId: string;
+    filePath: string;
+  }>;
+  lastSyncAt?: number;
+  lastSyncStatus?: string;
+  lastSyncError?: string;
+  createdAt: number;
+  createdBy: string;
+}
+
 export interface SidebarEnvMeta {
   environment: Environment;
   fileCount: number;
-  files: Array<{ secretSetId: string; filePath: string | null; latestRevision: number | null }>;
+  files: Array<{ secretSetId: string; filePath: string | null; latestRevision: number | null; hasSchema?: boolean; source?: string }>;
   latestRevisionTimestamp: number | null;
 }
 
@@ -245,6 +287,17 @@ export const convexFunctions = {
   listMembers: "members:listMembers",
   updateMemberRole: "members:updateMemberRole",
   removeMember: "members:removeMember",
+  listFileSchemas: "fileSchemas:listForProject",
+  getFileSchema: "fileSchemas:getForFilePath",
+  upsertFileSchema: "fileSchemas:upsert",
+  removeFileSchema: "fileSchemas:remove",
+  addSchemaField: "fileSchemas:addField",
+  listIntegrations: "integrations:listForProject",
+  getIntegration: "integrations:getById",
+  createIntegration: "integrations:create",
+  updateIntegration: "integrations:update",
+  removeIntegration: "integrations:remove",
+  updateIntegrationSyncStatus: "integrations:updateSyncStatus",
 } as const;
 
 export type ConvexFunctionName = (typeof convexFunctions)[keyof typeof convexFunctions];

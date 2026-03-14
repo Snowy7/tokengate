@@ -95,6 +95,47 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_workspace_and_email", ["workspaceId", "email"]),
 
+  fileSchemas: defineTable({
+    projectId: v.id("projects"),
+    filePath: v.string(),
+    fields: v.array(v.object({
+      name: v.string(),
+      type: v.string(),
+      required: v.boolean(),
+      sensitive: v.boolean(),
+      defaultValue: v.optional(v.string()),
+      description: v.optional(v.string()),
+      enumValues: v.optional(v.array(v.string())),
+    })),
+    version: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_and_path", ["projectId", "filePath"]),
+
+  integrations: defineTable({
+    projectId: v.id("projects"),
+    provider: v.string(),
+    label: v.optional(v.string()),
+    config: v.object({
+      deploymentUrl: v.optional(v.string()),
+      vercelProjectId: v.optional(v.string()),
+      wrappedCredential: v.string(),
+    }),
+    environmentMappings: v.array(v.object({
+      providerTarget: v.string(),
+      environmentId: v.id("environments"),
+      filePath: v.string(),
+    })),
+    lastSyncAt: v.optional(v.number()),
+    lastSyncStatus: v.optional(v.string()),
+    lastSyncError: v.optional(v.string()),
+    createdAt: v.number(),
+    createdBy: v.string(),
+  })
+    .index("by_project", ["projectId"]),
+
   auditEvents: defineTable({
     workspaceId: v.id("workspaces"),
     actorId: v.string(),

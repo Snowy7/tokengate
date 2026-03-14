@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./convex-client": "./src/convex-client.ts"
+    "./convex-client": "./src/convex-client.ts",
+    "./providers": "./src/providers/index.ts"
   }
 }
