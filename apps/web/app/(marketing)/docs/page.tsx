@@ -12,6 +12,10 @@ const sections = [
   { id: "encryption", label: "Encryption" },
   { id: "web-dashboard", label: "Web Dashboard" },
   { id: "team-workflows", label: "Team Workflows" },
+  { id: "sdk", label: "SDK (@tokengate/env)" },
+  { id: "nextjs", label: "Next.js Integration" },
+  { id: "vite", label: "Vite Integration" },
+  { id: "scan", label: "Secret Scanning" },
 ];
 
 function Terminal({
@@ -1797,6 +1801,193 @@ html {
                 <strong>.gitignore</strong> file. The{" "}
                 <code className="docs-code">.tokengate.json</code> file should be committed since it
                 contains only non-sensitive identifiers and environment mappings.
+              </p>
+            </div>
+          </section>
+
+          {/* ===== SDK ===== */}
+          <section id="sdk" className="docs-section">
+            <h2 className="docs-section-title">SDK (@tokengate/env)</h2>
+
+            <p className="docs-p">
+              The <code className="docs-code">@tokengate/env</code> SDK gives you type-safe,
+              validated environment variables with zero-knowledge encryption. Define a schema,
+              and the SDK fetches, decrypts, validates, and types your variables automatically.
+            </p>
+
+            <Terminal title="install">
+              <Line prompt cmd>npm install @tokengate/env</Line>
+            </Terminal>
+
+            <h3 className="docs-h3">Define a Schema</h3>
+            <p className="docs-p">
+              Create <code className="docs-code">tokengate.config.ts</code> in your project root:
+            </p>
+            <Terminal title="tokengate.config.ts">
+              <div><G>import</G> {"{"} defineConfig {"}"} <G>from</G> <Y>'@tokengate/env'</Y></div>
+              <br />
+              <div><G>export default</G> defineConfig({"{"}</div>
+              <div>  project: <Y>'web'</Y>,</div>
+              <div>  environment: <Y>'production'</Y>,</div>
+              <div>  schema: {"{"}</div>
+              <div>    DATABASE_URL:    {"{"} type: <Y>'string'</Y>, required: <G>true</G>, sensitive: <G>true</G> {"}"},</div>
+              <div>    API_KEY:         {"{"} type: <Y>'string'</Y>, required: <G>true</G>, sensitive: <G>true</G> {"}"},</div>
+              <div>    PORT:            {"{"} type: <Y>'port'</Y>, default: <W>3000</W> {"}"},</div>
+              <div>    DEBUG:           {"{"} type: <Y>'boolean'</Y>, default: <G>false</G> {"}"},</div>
+              <div>    ALLOWED_ORIGINS: {"{"} type: <Y>'string[]'</Y>, separator: <Y>','</Y> {"}"},</div>
+              <div>    LOG_LEVEL:       {"{"} type: <Y>'enum'</Y>, values: [<Y>'debug'</Y>, <Y>'info'</Y>, <Y>'warn'</Y>, <Y>'error'</Y>], default: <Y>'info'</Y> {"}"},</div>
+              <div>  {"}"}</div>
+              <div>{"}"})</div>
+            </Terminal>
+
+            <h3 className="docs-h3">Use in Your App</h3>
+            <Terminal title="app.ts">
+              <div><G>import</G> {"{"} createEnv {"}"} <G>from</G> <Y>'@tokengate/env'</Y></div>
+              <br />
+              <div><G>const</G> env = <G>await</G> createEnv({"{"} schema: {"{"} <D>/* ... */</D> {"}"} {"}"})</div>
+              <br />
+              <div>env.DATABASE_URL  <D>// string — guaranteed present</D></div>
+              <div>env.PORT          <D>// number — parsed from string</D></div>
+              <div>env.DEBUG         <D>// boolean — parsed from "true"/"1"</D></div>
+              <div>env.LOG_LEVEL     <D>// "debug" | "info" | "warn" | "error"</D></div>
+            </Terminal>
+
+            <h3 className="docs-h3">Schema Types</h3>
+            <div className="docs-table-wrap">
+              <table className="docs-table">
+                <thead><tr><th>Type</th><th>Parses to</th><th>Example</th></tr></thead>
+                <tbody>
+                  <tr><td><code className="docs-code">string</code></td><td>string</td><td><code className="docs-code">"hello"</code></td></tr>
+                  <tr><td><code className="docs-code">number</code></td><td>number</td><td><code className="docs-code">"42"</code> → 42</td></tr>
+                  <tr><td><code className="docs-code">boolean</code></td><td>boolean</td><td><code className="docs-code">"true"</code> / <code className="docs-code">"1"</code> / <code className="docs-code">"yes"</code></td></tr>
+                  <tr><td><code className="docs-code">string[]</code></td><td>string[]</td><td><code className="docs-code">"a,b,c"</code> → ["a","b","c"]</td></tr>
+                  <tr><td><code className="docs-code">number[]</code></td><td>number[]</td><td><code className="docs-code">"1,2,3"</code> → [1,2,3]</td></tr>
+                  <tr><td><code className="docs-code">url</code></td><td>string</td><td>Validated URL</td></tr>
+                  <tr><td><code className="docs-code">email</code></td><td>string</td><td>Validated email</td></tr>
+                  <tr><td><code className="docs-code">port</code></td><td>number</td><td>0–65535</td></tr>
+                  <tr><td><code className="docs-code">enum</code></td><td>string</td><td>One of <code className="docs-code">values</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="docs-h3">Sources Priority</h3>
+            <p className="docs-p">
+              Variables load from these sources in order (first match wins):
+            </p>
+            <ol className="docs-ol">
+              <li><strong>Cloud</strong> — Tokengate API (E2E encrypted, decrypted locally via <code className="docs-code">TOKENGATE_PASSWORD</code>)</li>
+              <li><strong>File</strong> — Local <code className="docs-code">.env</code> file</li>
+              <li><strong>Process</strong> — <code className="docs-code">process.env</code></li>
+            </ol>
+
+            <h3 className="docs-h3">Generate Types</h3>
+            <Terminal title="terminal">
+              <Line prompt cmd>tokengate generate-types</Line>
+              <br />
+              <div><G>{"✔"}</G> <W>env.d.ts</W> — 6 typed variables</div>
+              <div><G>{"✔"}</G> <W>.env.example</W> — template with defaults</div>
+            </Terminal>
+          </section>
+
+          {/* ===== NEXT.JS ===== */}
+          <section id="nextjs" className="docs-section">
+            <h2 className="docs-section-title">Next.js Integration</h2>
+
+            <Terminal title="install">
+              <Line prompt cmd>npm install @tokengate/env-next @tokengate/env</Line>
+            </Terminal>
+
+            <h3 className="docs-h3">Wrap Your Config</h3>
+            <Terminal title="next.config.ts">
+              <div><G>import</G> {"{"} withTokengate {"}"} <G>from</G> <Y>'@tokengate/env-next'</Y></div>
+              <br />
+              <div><G>export default</G> withTokengate({"{"}</div>
+              <div>  schema: {"{"}</div>
+              <div>    DATABASE_URL: {"{"} type: <Y>'string'</Y>, required: <G>true</G>, sensitive: <G>true</G> {"}"},</div>
+              <div>    NEXT_PUBLIC_API_URL: {"{"} type: <Y>'url'</Y>, required: <G>true</G> {"}"},</div>
+              <div>    PORT: {"{"} type: <Y>'port'</Y>, default: <W>3000</W> {"}"},</div>
+              <div>  {"}"}</div>
+              <div>{"}"})</div>
+            </Terminal>
+
+            <p className="docs-p">
+              Variables prefixed with <code className="docs-code">NEXT_PUBLIC_</code> are
+              automatically exposed to client-side code. All others are server-only.
+            </p>
+
+            <h3 className="docs-h3">Server Components / API Routes</h3>
+            <Terminal title="app/api/route.ts">
+              <div><G>import</G> {"{"} getEnv {"}"} <G>from</G> <Y>'@tokengate/env-next'</Y></div>
+              <br />
+              <div><G>export async function</G> GET() {"{"}</div>
+              <div>  <G>const</G> env = <G>await</G> getEnv({"{"} schema: {"{"} <D>/* ... */</D> {"}"} {"}"})</div>
+              <div>  <D>// env.DATABASE_URL — fully typed</D></div>
+              <div>{"}"}</div>
+            </Terminal>
+          </section>
+
+          {/* ===== VITE ===== */}
+          <section id="vite" className="docs-section">
+            <h2 className="docs-section-title">Vite Integration</h2>
+
+            <Terminal title="install">
+              <Line prompt cmd>npm install @tokengate/env-vite @tokengate/env</Line>
+            </Terminal>
+
+            <h3 className="docs-h3">Add the Plugin</h3>
+            <Terminal title="vite.config.ts">
+              <div><G>import</G> {"{"} defineConfig {"}"} <G>from</G> <Y>'vite'</Y></div>
+              <div><G>import</G> {"{"} tokengate {"}"} <G>from</G> <Y>'@tokengate/env-vite'</Y></div>
+              <br />
+              <div><G>export default</G> defineConfig({"{"}</div>
+              <div>  plugins: [</div>
+              <div>    tokengate({"{"}</div>
+              <div>      schema: {"{"}</div>
+              <div>        VITE_API_URL: {"{"} type: <Y>'url'</Y>, required: <G>true</G> {"}"},</div>
+              <div>        DATABASE_URL: {"{"} type: <Y>'string'</Y>, required: <G>true</G>, sensitive: <G>true</G> {"}"},</div>
+              <div>      {"}"}</div>
+              <div>    {"}"})</div>
+              <div>  ]</div>
+              <div>{"}"})</div>
+            </Terminal>
+
+            <p className="docs-p">
+              Variables prefixed with <code className="docs-code">VITE_</code> are exposed to
+              client code via <code className="docs-code">import.meta.env</code>. All variables
+              are available in <code className="docs-code">process.env</code> during SSR/build.
+            </p>
+          </section>
+
+          {/* ===== SCANNING ===== */}
+          <section id="scan" className="docs-section">
+            <h2 className="docs-section-title">Secret Scanning</h2>
+
+            <p className="docs-p">
+              Tokengate can scan your codebase for accidentally hardcoded secret values.
+              It reads your mapped <code className="docs-code">.env</code> files, extracts
+              the values, and searches all source files for matches.
+            </p>
+
+            <Terminal title="terminal">
+              <Line prompt cmd>tokengate scan</Line>
+              <br />
+              <div><G>{"✔"}</G> Found <W>12</W> secret values to scan for.</div>
+              <div><D>Scanning codebase...</D></div>
+              <br />
+              <div><span className="docs-red">{"✗"}</span> Found <span className="docs-red">3 potential leaks</span>:</div>
+              <br />
+              <div>  <W>src/config.ts</W></div>
+              <div>    <D>L42:15</D> <span className="docs-red">DATABASE_URL</span> leaked: <D>const db = "postgres://user:pass@prod..."</D></div>
+              <br />
+              <div>  <W>deploy.sh</W></div>
+              <div>    <D>L12:20</D> <span className="docs-red">STRIPE_SECRET</span> leaked: <D>export STRIPE_KEY="sk_live_..."</D></div>
+            </Terminal>
+
+            <div className="docs-info">
+              <p className="docs-info-label">CI Integration</p>
+              <p>
+                <code className="docs-code">tokengate scan</code> exits with code 1 if leaks are found,
+                making it easy to add to your CI pipeline as a pre-merge check.
               </p>
             </div>
           </section>
