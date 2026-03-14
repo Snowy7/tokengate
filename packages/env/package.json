@@ -3,31 +3,67 @@
   "version": "0.1.0",
   "description": "Type-safe, encrypted environment variables from Tokengate cloud",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema.ts",
-    "./loader": "./src/loader.ts",
-    "./config": "./src/config.ts",
-    "./typegen": "./src/typegen.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./loader": {
+      "types": "./dist/loader.d.ts",
+      "import": "./dist/loader.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./typegen": {
+      "types": "./dist/typegen.d.ts",
+      "import": "./dist/typegen.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit"
   },
   "keywords": [
     "env",
     "environment",
+    "variables",
     "secrets",
     "encryption",
     "e2e",
     "typed",
     "schema",
-    "validation"
+    "validation",
+    "tokengate",
+    "dotenv"
   ],
   "license": "MIT",
+  "author": "Snowy7",
+  "homepage": "https://tokengate.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Snowy7/tokengate.git",
     "directory": "packages/env"
   },
+  "bugs": {
+    "url": "https://github.com/Snowy7/tokengate/issues"
+  },
   "dependencies": {
-    "@tokengate/crypto": "workspace:*",
-    "@tokengate/env-format": "workspace:*"
+    "@tokengate/crypto": "^0.2.4",
+    "@tokengate/env-format": "^0.2.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

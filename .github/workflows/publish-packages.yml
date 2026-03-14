@@ -1,0 +1,200 @@
+# Triggered on: git tag push (pkg-v*) OR manual trigger
+# Builds and publishes all @tokengate/* packages to npm via OIDC trusted publishers
+name: publish-packages
+
+on:
+  push:
+    tags:
+      - 'pkg-v*'
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Packages to publish (comma-separated: crypto,env-format,env,env-next,env-vite or "all")'
+        required: false
+        default: 'all'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # Step 1: Base packages (no @tokengate deps)
+  publish-base:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: crypto
+            path: packages/crypto
+          - name: env-format
+            path: packages/env-format
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.10" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+
+      - name: Should publish?
+        id: check
+        run: |
+          INPUT="${{ github.event.inputs.packages || 'all' }}"
+          PKG="${{ matrix.package.name }}"
+          if [ "$INPUT" = "all" ] || echo "$INPUT" | grep -q "$PKG"; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.skip == 'false'
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        if: steps.check.outputs.skip == 'false'
+        working-directory: ${{ matrix.package.path }}
+        run: npx tsc -p tsconfig.build.json
+
+      - name: Verify
+        if: steps.check.outputs.skip == 'false'
+        working-directory: ${{ matrix.package.path }}
+        run: test -f dist/index.js && test -f dist/index.d.ts
+
+      - name: Check version
+        if: steps.check.outputs.skip == 'false'
+        id: ver
+        working-directory: ${{ matrix.package.path }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${NAME}@${VER}" version 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.check.outputs.skip == 'false' && steps.ver.outputs.exists == 'false'
+        working-directory: ${{ matrix.package.path }}
+        run: npm publish --provenance --access public
+
+  # Step 2: @tokengate/env (depends on crypto + env-format)
+  publish-env:
+    needs: publish-base
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.10" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+
+      - name: Should publish?
+        id: check
+        run: |
+          INPUT="${{ github.event.inputs.packages || 'all' }}"
+          if [ "$INPUT" = "all" ] || echo "$INPUT" | grep -q "env"; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.skip == 'false'
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        if: steps.check.outputs.skip == 'false'
+        run: bun test packages/env
+
+      - name: Build chain
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd packages/crypto && npx tsc -p tsconfig.build.json && cd ../..
+          cd packages/env-format && npx tsc -p tsconfig.build.json && cd ../..
+          cd packages/env && npx tsc -p tsconfig.build.json
+
+      - name: Verify
+        if: steps.check.outputs.skip == 'false'
+        run: test -f packages/env/dist/index.js && test -f packages/env/dist/index.d.ts
+
+      - name: Check version
+        if: steps.check.outputs.skip == 'false'
+        id: ver
+        working-directory: packages/env
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${NAME}@${VER}" version 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.check.outputs.skip == 'false' && steps.ver.outputs.exists == 'false'
+        working-directory: packages/env
+        run: npm publish --provenance --access public
+
+  # Step 3: Framework plugins (depend on @tokengate/env)
+  publish-plugins:
+    needs: publish-env
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: env-next
+            path: packages/env-next
+          - name: env-vite
+            path: packages/env-vite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.10" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+
+      - name: Should publish?
+        id: check
+        run: |
+          INPUT="${{ github.event.inputs.packages || 'all' }}"
+          PKG="${{ matrix.package.name }}"
+          if [ "$INPUT" = "all" ] || echo "$INPUT" | grep -q "$PKG"; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.skip == 'false'
+        run: bun install --frozen-lockfile
+
+      - name: Build chain
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd packages/crypto && npx tsc -p tsconfig.build.json && cd ../..
+          cd packages/env-format && npx tsc -p tsconfig.build.json && cd ../..
+          cd packages/env && npx tsc -p tsconfig.build.json && cd ../..
+          cd ${{ matrix.package.path }} && npx tsc -p tsconfig.build.json
+
+      - name: Verify
+        if: steps.check.outputs.skip == 'false'
+        working-directory: ${{ matrix.package.path }}
+        run: test -f dist/index.js && test -f dist/index.d.ts
+
+      - name: Check version
+        if: steps.check.outputs.skip == 'false'
+        id: ver
+        working-directory: ${{ matrix.package.path }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${NAME}@${VER}" version 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.check.outputs.skip == 'false' && steps.ver.outputs.exists == 'false'
+        working-directory: ${{ matrix.package.path }}
+        run: npm publish --provenance --access public

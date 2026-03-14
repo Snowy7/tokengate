@@ -32,7 +32,7 @@ export interface TokengateConfig<S extends EnvSchema = EnvSchema> {
    * - "process": process.env
    * Default: ["cloud", "file", "process"]
    */
-  sources?: Array<"cloud" | "file" | "process">;
+  sources?: Array<"cloud" | "file" | "process" | "cache">;
   /**
    * Cache decrypted values locally for faster restarts.
    * Stored encrypted at .tokengate/cache/<env>.enc

@@ -3,19 +3,43 @@
   "version": "0.1.0",
   "description": "Tokengate environment variable integration for Next.js",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [
+    "nextjs",
+    "next",
+    "env",
+    "environment",
+    "secrets",
+    "tokengate",
+    "encryption"
+  ],
+  "license": "MIT",
+  "author": "Snowy7",
+  "homepage": "https://tokengate.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Snowy7/tokengate.git",
+    "directory": "packages/env-next"
   },
   "peerDependencies": {
     "next": ">=14.0.0"
   },
   "dependencies": {
-    "@tokengate/env": "workspace:*"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Snowy7/tokengate.git",
-    "directory": "packages/env-next"
+    "@tokengate/env": "^0.1.0"
   }
 }
