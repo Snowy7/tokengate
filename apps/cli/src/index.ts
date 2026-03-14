@@ -981,6 +981,31 @@ async function handlePull() {
       secretSet.keySalt
     );
 
+    // Check for files that will be overwritten
+    const overwriteFiles = files.filter(
+      (f) => f.remoteRevision && f.localExists && f.status !== "synced"
+    );
+    if (overwriteFiles.length > 0) {
+      spinPull.stop("Ready to write.");
+      p.log.warn(
+        `The following local file${overwriteFiles.length > 1 ? "s" : ""} will be overwritten:`
+      );
+      for (const f of overwriteFiles) {
+        p.log.message(`  ${pc.yellow("!")} ${pc.bold(f.file)} (local changes will be lost)`);
+      }
+      const proceed = await p.confirm({
+        message: "Overwrite these files?",
+        initialValue: true
+      });
+      bail(proceed);
+      if (!proceed) {
+        p.log.info("Pull cancelled.");
+        p.outro("Done");
+        return;
+      }
+      spinPull.start(`Pulling from ${pc.dim(envName)}`);
+    }
+
     for (const f of files) {
       if (!f.remoteRevision) continue;
 
@@ -1462,6 +1487,29 @@ async function linkFileToEnvironment(
   if (!local.environmentId || !local.environmentName) {
     p.log.error("No environment set. Run tokengate init first.");
     return null;
+  }
+
+  // Check if this file path already exists as a secret set in this environment
+  const existingSets = await client.query<SecretSet[]>(
+    convexFunctions.listSecretSetsForEnvironment,
+    { environmentId: local.environmentId }
+  );
+  const normalizedFile = file.replace(/\\/g, "/");
+  const existing = existingSets.find(
+    (ss) => (ss.filePath ?? "").replace(/\\/g, "/") === normalizedFile
+  );
+
+  if (existing) {
+    p.log.warn(
+      `${pc.bold(file)} already exists in ${pc.cyan(local.environmentName)}. Reusing existing link.`
+    );
+    const mapping: EnvFileMapping = {
+      secretSetId: existing.id,
+      environmentId: local.environmentId,
+      environmentName: local.environmentName
+    };
+    local.mappings[file] = mapping;
+    return mapping;
   }
 
   const addIt = await p.confirm({

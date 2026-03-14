@@ -190,12 +190,23 @@ export const addSecretSet = mutation({
 
     await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin", "member"]);
 
+    // Prevent duplicate file paths within the same environment
+    const normalizedPath = args.filePath.replace(/\\/g, "/");
+    const existingSets = await ctx.db.query("secretSets")
+      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+      .collect();
+
+    const duplicate = existingSets.find(
+      (ss) => (ss.filePath ?? "").replace(/\\/g, "/") === normalizedPath
+    );
+    if (duplicate) {
+      throw new Error(`A file with path "${normalizedPath}" already exists in this environment.`);
+    }
+
     // If no keySalt provided, copy from an existing secretSet in this environment
     let keySalt = args.keySalt;
     if (!keySalt) {
-      const existing = await ctx.db.query("secretSets")
-        .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
-        .first();
+      const existing = existingSets[0];
       if (!existing) {
         throw new Error("No existing secret set found to inherit keySalt from. Provide keySalt explicitly.");
       }
@@ -204,7 +215,7 @@ export const addSecretSet = mutation({
 
     const secretSetId = await ctx.db.insert("secretSets", {
       environmentId: args.environmentId,
-      filePath: args.filePath,
+      filePath: normalizedPath,
       keySalt,
       createdAt: Date.now()
     });
