@@ -1795,22 +1795,48 @@ export function DashboardClient() {
                       </>
                     ) : (
                       <>
-                        {/* Free-form mode (no schema) */}
-                        {filteredEntryIndices.map((i) => {
-                          const entry = envEntries[i];
-                          return (
-                            <div className="ed1-line" key={i}>
-                              <span className="ed1-linenum">{i + 1}</span>
-                              <input className="ed1-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
-                              <span className="ed1-eq">=</span>
-                              <input className="ed1-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
-                              <button className="ed1-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
-                            </div>
-                          );
-                        })}
+                        {/* No schema — prompt to auto-create one from current values */}
+                        <div className="flex flex-col items-center justify-center py-8 gap-3">
+                          <IconFile size={32} />
+                          <p className="muted text-sm text-center max-w-[360px]">
+                            This file has no schema. Create one to enforce variable structure across all environments.
+                          </p>
+                          {envEntries.length > 0 ? (
+                            <button className="button" disabled={isPending} onClick={() => {
+                              startTransition(async () => {
+                                try {
+                                  const fields = envEntries
+                                    .filter((e) => e.key.trim())
+                                    .map((e) => {
+                                      const val = e.value.trim().replace(/^["']|["']$/g, "");
+                                      let type = "string";
+                                      if (/^(true|false|yes|no|on|off|0|1)$/i.test(val)) type = "boolean";
+                                      else if (/^\d+$/.test(val) && Number(val) <= 65535) type = "number";
+                                      else if (/^https?:\/\//.test(val)) type = "url";
+                                      const sensitive = /secret|key|token|password|private|credential/i.test(e.key);
+                                      return { name: e.key, type, required: true, sensitive };
+                                    });
+                                  await postJson("/api/schemas", {
+                                    projectId: selectedProjectId,
+                                    filePath: selectedSecretSet?.filePath || ".env",
+                                    fields,
+                                  });
+                                  pushToast(`Schema created with ${fields.length} field${fields.length !== 1 ? "s" : ""}.`, "success");
+                                  void refreshSchemas();
+                                } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
+                              });
+                            }}>
+                              <IconPlus size={14} /> Auto-create schema from current variables ({envEntries.filter((e) => e.key.trim()).length})
+                            </button>
+                          ) : (
+                            <button className="button secondary" onClick={() => setActiveView("schemas")}>
+                              <IconPlus size={14} /> Create schema manually
+                            </button>
+                          )}
+                        </div>
                       </>
                     )}
-                    <button className="ed1-add" onClick={addEntry}><IconPlus size={12} /> {currentFileSchema ? "add extra variable" : "new variable"}</button>
+                    {currentFileSchema && <button className="ed1-add" onClick={addEntry}><IconPlus size={12} /> add extra variable</button>}
                   </div>
                 )}
 
