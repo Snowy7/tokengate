@@ -94,6 +94,12 @@ function IconBox({ size = 16 }: { size?: number }) {
   );
 }
 
+function IconMenu({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+  );
+}
+
 function IconSettings({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
@@ -368,6 +374,7 @@ export function DashboardClient() {
   const [maskedValues, setMaskedValues] = useState(true);
 
   // --- Sidebar UI ---
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("secrets");
@@ -846,11 +853,15 @@ export function DashboardClient() {
   // ---------------------------------------------------------------------------
   return (
     <div className="dashboard">
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && <div className="sidebar-overlay" onClick={() => setMobileSidebarOpen(false)} />}
+
       {/* SIDEBAR */}
-      <aside className="sidebar">
+      <aside className={`sidebar${mobileSidebarOpen ? " open" : ""}`}>
         <div className="sidebar-header">
           <IconShield size={22} />
           <span>Tokengate</span>
+          <button className="sidebar-close-btn" onClick={() => setMobileSidebarOpen(false)}><IconX size={18} /></button>
         </div>
 
         {/* Workspace Switcher */}
@@ -881,7 +892,7 @@ export function DashboardClient() {
                     <button
                       key={w.workspace.id}
                       className={`sidebar-item${w.workspace.id === selectedWorkspaceId ? " active" : ""}`}
-                      onClick={() => { selectWorkspace(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); }}
+                      onClick={() => { selectWorkspace(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); setMobileSidebarOpen(false); }}
                     >
                       <IconBox size={14} />
                       <span style={{ flex: 1, textAlign: "left" }}>{w.workspace.name}</span>
@@ -952,7 +963,7 @@ export function DashboardClient() {
                             <button
                               className={`sidebar-item${isSelected ? " active" : ""}`}
                               style={{ paddingLeft: 8 }}
-                              onClick={() => { selectEnvironment(env.id); setActiveView("secrets"); }}
+                              onClick={() => { selectEnvironment(env.id); setActiveView("secrets"); setMobileSidebarOpen(false); }}
                             >
                               <IconLayers size={13} />
                               <span style={{ flex: 1, textAlign: "left" }}>{env.name}</span>
@@ -1021,6 +1032,7 @@ export function DashboardClient() {
       <main className="main-content">
         {/* Breadcrumb header */}
         <div className="content-header">
+          <button className="mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)}><IconMenu size={18} /></button>
           <nav className="breadcrumb">
             {selectedWorkspace && (
               <>

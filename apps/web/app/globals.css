@@ -1866,13 +1866,135 @@ p {
 
 
 /* ============================================================
+   Mobile Sidebar — drawer + overlay + menu button
+   ============================================================ */
+
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar-close-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sidebar-text-muted);
+  cursor: pointer;
+  margin-left: auto;
+}
+.sidebar-close-btn:hover { color: var(--sidebar-text-bright); }
+
+.sidebar-overlay {
+  display: none;
+}
+
+
+/* ============================================================
    Responsive — 4K / 2K / 1080p / Tablet / Mobile
    ============================================================ */
 
-/* 4K+ (2560px and above) — wider sidebar, larger fonts, more space */
+/* 4K+ (2560px+) — scale everything up significantly */
 @media (min-width: 2560px) {
   :root {
-    --sidebar-width: 320px;
+    --sidebar-width: 340px;
+    --content-header-height: 72px;
+  }
+
+  body { font-size: 18px; }
+  h1 { font-size: 40px; }
+  h2 { font-size: 28px; }
+  h3 { font-size: 20px; }
+  h4 { font-size: 16px; }
+
+  .sidebar-header { padding: 22px 24px; font-size: 18px; gap: 12px; }
+  .sidebar-header svg { width: 28px; height: 28px; }
+  .sidebar-item { padding: 10px 16px; font-size: 15px; gap: 10px; }
+  .sidebar-item svg { width: 18px; height: 18px; }
+  .sidebar-section { padding: 14px 12px 6px; }
+  .sidebar-section-label { font-size: 12px; letter-spacing: 0.12em; }
+  .sidebar-tree-children { margin-left: 16px; padding-left: 6px; }
+
+  .workspace-switcher-trigger { padding: 10px 16px; font-size: 15px; gap: 10px; }
+  .role-badge { font-size: 12px; padding: 3px 10px; }
+
+  .content-header { padding: 0 36px; }
+  .breadcrumb { font-size: 15px; gap: 6px; }
+  .tag { font-size: 12px; padding: 4px 12px; }
+
+  .ed1-toolbar { padding: 10px 20px; gap: 10px; }
+  .ed1-tab { padding: 8px 18px; font-size: 14px; }
+  .ed1-search { width: 240px; font-size: 14px; padding: 8px 12px; }
+  .ed1-linenum { width: 56px; font-size: 14px; padding: 10px 12px; }
+  .ed1-key { font-size: 16px; padding: 10px 12px; }
+  .ed1-eq { font-size: 16px; }
+  .ed1-val { font-size: 16px; padding: 10px 12px; }
+  .ed1-del { width: 40px; }
+  .ed1-del svg { width: 16px; height: 16px; }
+  .ed1-add { padding: 12px 16px 12px 64px; font-size: 13px; }
+  .ed1-status { padding: 8px 20px; font-size: 13px; gap: 16px; }
+  .ed1-history { padding: 12px 20px; max-height: 260px; }
+  .ed1-history-label { font-size: 12px; }
+  .ed1-rev { font-size: 14px; padding: 6px 12px; }
+  .ed1-line { border-bottom-width: 2px; }
+
+  .ed-rev-banner { padding: 10px 20px; font-size: 14px; }
+  .ed-rev-mode-btn { padding: 5px 14px; font-size: 13px; }
+  .ed-diff-stats { font-size: 13px; }
+  .ed-diff-header-row { font-size: 12px; padding: 8px 0; }
+  .ed-diff-key { font-size: 15px; padding: 10px 12px; }
+  .ed-diff-old, .ed-diff-new { font-size: 14px; padding: 10px 12px; }
+  .ed-diff-arrow { width: 32px; font-size: 14px; }
+  .ed-diff-badge { font-size: 16px; }
+
+  .button { padding: 12px 24px; font-size: 14px; border-width: 3px; }
+  .button.sm { padding: 8px 16px; font-size: 13px; }
+  .button.lg { padding: 14px 28px; font-size: 16px; }
+  .icon-button { width: 40px; height: 40px; }
+  .icon-button svg { width: 20px; height: 20px; }
+
+  .field { font-size: 15px; gap: 8px; }
+  .field input, .field textarea, .field select { padding: 10px 14px; font-size: 15px; }
+  .input { padding: 10px 14px; font-size: 15px; }
+  .select { padding: 10px 38px 10px 14px; font-size: 15px; }
+
+  .modal { max-width: 640px; }
+  .modal-header { font-size: 20px; padding: 24px 28px 0; }
+  .modal-body { padding: 20px 28px 28px; gap: 20px; }
+
+  .panel { border-width: 3px; }
+  .member-row { padding: 14px 0; gap: 16px; }
+  .members-list { font-size: 16px; }
+
+  .lock-screen h2 { font-size: 28px; }
+  .lock-screen p { font-size: 16px; max-width: 460px; }
+  .lock-icon { width: 80px; height: 80px; }
+  .lock-icon svg { width: 36px; height: 36px; }
+
+  .empty-state h3 { font-size: 20px; }
+  .empty-state p { font-size: 15px; }
+  .empty-state svg { width: 56px; height: 56px; }
+
+  .loading-spinner { width: 40px; height: 40px; }
+}
+
+/* 2K (1920–2559px) — moderate scale up */
+@media (min-width: 1920px) and (max-width: 2559px) {
+  :root {
+    --sidebar-width: 300px;
     --content-header-height: 64px;
   }
 
@@ -1881,49 +2003,37 @@ p {
   h2 { font-size: 24px; }
   h3 { font-size: 18px; }
 
-  .sidebar-header { padding: 20px 22px; font-size: 16px; }
+  .sidebar-header { padding: 18px 20px; font-size: 16px; }
   .sidebar-item { padding: 9px 14px; font-size: 14px; }
   .sidebar-section-label { font-size: 11px; }
 
-  .content-header { padding: 0 32px; }
+  .content-header { padding: 0 28px; }
   .breadcrumb { font-size: 14px; }
 
   .ed1-toolbar { padding: 8px 16px; }
-  .ed1-tab { padding: 6px 16px; font-size: 13px; }
+  .ed1-tab { padding: 7px 16px; font-size: 13px; }
   .ed1-search { width: 200px; font-size: 13px; padding: 6px 10px; }
-  .ed1-linenum { width: 48px; font-size: 12px; padding: 8px 10px; }
-  .ed1-key { font-size: 14px; padding: 8px 10px; }
-  .ed1-val { font-size: 14px; padding: 8px 10px; }
+  .ed1-linenum { width: 48px; font-size: 13px; padding: 8px 10px; }
+  .ed1-key { font-size: 15px; padding: 8px 10px; }
+  .ed1-val { font-size: 15px; padding: 8px 10px; }
   .ed1-status { padding: 6px 16px; font-size: 12px; }
   .ed1-history { padding: 10px 16px; }
   .ed1-rev { font-size: 13px; padding: 5px 10px; }
 
   .button { padding: 10px 20px; font-size: 13px; }
-  .button.sm { padding: 6px 12px; font-size: 12px; }
+  .button.sm { padding: 7px 14px; font-size: 12px; }
 
   .modal { max-width: 560px; }
   .modal-header { font-size: 18px; padding: 22px 26px 0; }
   .modal-body { padding: 18px 26px 26px; }
 
-  .panel { padding: 24px; }
-  .member-row { padding: 12px 0; }
-  .role-badge { font-size: 11px; padding: 3px 10px; }
-
   .tag { font-size: 11px; padding: 3px 10px; }
+  .role-badge { font-size: 11px; }
   .lock-screen h2 { font-size: 24px; }
-  .empty-state h3 { font-size: 18px; }
+  .lock-screen p { font-size: 15px; }
 }
 
-/* 2K (1920–2559px) — slight bump */
-@media (min-width: 1920px) and (max-width: 2559px) {
-  :root {
-    --sidebar-width: 280px;
-  }
-
-  .ed1-search { width: 180px; }
-}
-
-/* Standard 1080p (1024–1919px) — defaults, no changes needed */
+/* Standard 1080p (1024–1919px) — defaults apply */
 
 /* Tablet (768–1023px) — narrower sidebar */
 @media (max-width: 1023px) {
@@ -1950,31 +2060,48 @@ p {
   .modal { max-width: 420px; }
 }
 
-/* Mobile (below 768px) — stacked layout */
+/* Mobile (below 768px) — sidebar becomes slide-out drawer */
 @media (max-width: 767px) {
-  .dashboard {
-    flex-direction: column;
+  .mobile-menu-btn { display: inline-flex; }
+  .sidebar-close-btn { display: inline-flex; }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 998;
+    animation: fade-in 150ms ease;
   }
 
   .sidebar {
-    width: 100%;
-    min-width: 100%;
-    height: auto;
-    max-height: 50vh;
-    border-right: none;
-    border-bottom: 3px solid var(--sidebar-accent);
-    overflow-y: auto;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    min-width: 280px;
+    z-index: 999;
+    border-right: 3px solid var(--sidebar-accent);
+    border-bottom: none;
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+    height: 100vh;
+    max-height: 100vh;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
   }
 
   .main-content {
-    height: auto;
-    min-height: 50vh;
+    height: 100vh;
     overflow-y: auto;
     flex: 1;
   }
 
-  /* Editor goes full-width */
-  .ed1-wrap { min-height: 60vh; }
+  .ed1-wrap { min-height: 0; }
 
   .ed1-toolbar {
     flex-wrap: wrap;
@@ -1992,7 +2119,6 @@ p {
 
   .ed1-history { max-height: 140px; }
 
-  /* Diff view stacks on mobile */
   .ed-diff-header-row { display: none; }
   .ed-diff-line { flex-wrap: wrap; }
   .ed-diff-key { flex: 100%; font-size: 11px; }
@@ -2007,6 +2133,7 @@ p {
     padding: 0 12px;
     min-height: 44px;
     height: auto;
+    gap: 8px;
   }
 
   .breadcrumb { font-size: 11px; flex-wrap: wrap; }
@@ -2015,12 +2142,10 @@ p {
   .modal-header { padding: 14px 16px 0; }
   .modal-body { padding: 12px 16px 16px; }
 
-  /* Settings panels */
   .member-row { flex-wrap: wrap; gap: 6px; }
   .member-row > div:last-child { width: 100%; }
 
-  /* Workspace switcher dropdown */
-  .workspace-switcher-dropdown { position: fixed; left: 8px; right: 8px; top: auto; z-index: 100; }
+  .workspace-switcher-dropdown { max-height: 60vh; overflow-y: auto; }
 }
 
 /* Small phone (below 480px) */
@@ -2030,8 +2155,7 @@ p {
   h1 { font-size: 22px; }
   h2 { font-size: 17px; }
 
-  .sidebar { max-height: 40vh; }
-  .sidebar-header { padding: 10px 12px; font-size: 12px; }
+  .sidebar { width: 260px; min-width: 260px; }
 
   .lock-screen { padding: 24px 16px; }
   .lock-screen h2 { font-size: 17px; }
