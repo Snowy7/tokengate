@@ -125,26 +125,91 @@ export default function MarketingPage() {
   .tg-dot { animation: none !important; }
 }
 
-/* 4K+ */
-@media (min-width: 2560px) {
-  .tg-hero, .tg-section, .tg-encrypt-section { max-width: 1800px; }
-  .tg-hero-headline { font-size: 72px; }
-  .tg-hero-sub { font-size: 20px; max-width: 560px; }
-  .tg-nav { max-width: 1800px; height: 72px; }
-  .tg-section-title { font-size: 34px; }
-  .tg-cta { max-width: 1800px; }
-  .tg-footer { max-width: 1800px; font-size: 14px; }
-  .tg-stat-number { font-size: 40px; }
+/* 2K (1440p–2K displays, 1920px+) */
+@media (min-width: 1440px) {
+  .tg-hero, .tg-section, .tg-encrypt-section,
+  .tg-nav, .tg-cta, .tg-footer { max-width: 1400px; }
+
+  .tg-hero-headline { font-size: 68px; }
+  .tg-hero-sub { font-size: 18px; max-width: 500px; }
+  .tg-hero { padding: 100px 40px 80px; gap: 48px; }
+  .tg-section { padding: 80px 40px; }
+  .tg-encrypt-section { padding: 80px 40px; }
+  .tg-section-title { font-size: 30px; }
+  .tg-nav { height: 64px; padding: 0 40px; }
+  .tg-nav-link { font-size: 15px; }
+  .tg-btn { padding: 12px 24px; font-size: 15px; }
+  .tg-btn-secondary { padding: 12px 24px; font-size: 15px; }
+  .tg-stat-number { font-size: 36px; }
   .tg-stat-label { font-size: 13px; }
+  .tg-footer { font-size: 14px; padding: 32px 40px; }
+  .tg-showcase-card { padding: 24px; }
+  .tg-showcase-card h3 { font-size: 16px; }
+  .tg-showcase-card p { font-size: 14px; }
+  .tg-terminal-body { font-size: 14px; padding: 24px; }
 }
 
-/* 2K */
-@media (min-width: 1920px) and (max-width: 2559px) {
-  .tg-hero, .tg-section, .tg-encrypt-section { max-width: 1440px; }
-  .tg-hero-headline { font-size: 60px; }
-  .tg-nav { max-width: 1440px; }
-  .tg-cta { max-width: 1440px; }
-  .tg-footer { max-width: 1440px; }
+/* Wide 2K+ (1920px+) */
+@media (min-width: 1920px) {
+  .tg-hero, .tg-section, .tg-encrypt-section,
+  .tg-nav, .tg-cta, .tg-footer { max-width: 1600px; }
+
+  .tg-hero-headline { font-size: 80px; }
+  .tg-hero-sub { font-size: 20px; max-width: 560px; line-height: 1.7; }
+  .tg-hero { padding: 120px 48px 96px; gap: 56px; }
+  .tg-section { padding: 96px 48px; }
+  .tg-encrypt-section { padding: 96px 48px; }
+  .tg-section-title { font-size: 36px; }
+  .tg-section-sub { font-size: 16px; }
+  .tg-nav { height: 72px; padding: 0 48px; }
+  .tg-logo-text { font-size: 18px; }
+  .tg-nav-link { font-size: 16px; }
+  .tg-btn { padding: 14px 28px; font-size: 16px; }
+  .tg-btn-secondary { padding: 14px 28px; font-size: 16px; }
+  .tg-stat-number { font-size: 44px; }
+  .tg-stat-label { font-size: 14px; }
+  .tg-stat-cell { padding: 32px 24px; }
+  .tg-footer { font-size: 15px; padding: 36px 48px; }
+  .tg-showcase-grid { gap: 24px; }
+  .tg-showcase-card { padding: 28px; }
+  .tg-showcase-card h3 { font-size: 17px; }
+  .tg-showcase-card p { font-size: 15px; line-height: 1.7; }
+  .tg-terminal-body { font-size: 15px; padding: 28px; }
+  .tg-sync-panel { font-size: 14px; }
+  .tg-cta-headline { font-size: 48px; }
+  .tg-cta-sub { font-size: 18px; }
+}
+
+/* 4K+ (2560px+) */
+@media (min-width: 2560px) {
+  .tg-hero, .tg-section, .tg-encrypt-section,
+  .tg-nav, .tg-cta, .tg-footer { max-width: 2000px; }
+
+  .tg-hero-headline { font-size: 96px; }
+  .tg-hero-sub { font-size: 24px; max-width: 680px; }
+  .tg-hero { padding: 140px 64px 120px; gap: 64px; }
+  .tg-section { padding: 120px 64px; }
+  .tg-encrypt-section { padding: 120px 64px; }
+  .tg-section-title { font-size: 44px; }
+  .tg-section-sub { font-size: 18px; }
+  .tg-nav { height: 80px; padding: 0 64px; }
+  .tg-logo-box { width: 36px; height: 36px; font-size: 16px; }
+  .tg-logo-text { font-size: 20px; }
+  .tg-nav-link { font-size: 18px; }
+  .tg-btn { padding: 16px 32px; font-size: 18px; border-width: 3px; }
+  .tg-btn-secondary { padding: 16px 32px; font-size: 18px; border-width: 3px; }
+  .tg-stat-number { font-size: 52px; }
+  .tg-stat-label { font-size: 16px; }
+  .tg-stat-cell { padding: 40px 32px; }
+  .tg-footer { font-size: 16px; padding: 40px 64px; }
+  .tg-showcase-grid { gap: 32px; }
+  .tg-showcase-card { padding: 32px; }
+  .tg-showcase-card h3 { font-size: 20px; }
+  .tg-showcase-card p { font-size: 17px; line-height: 1.7; }
+  .tg-terminal-body { font-size: 16px; padding: 32px; }
+  .tg-sync-panel { font-size: 16px; }
+  .tg-cta-headline { font-size: 56px; }
+  .tg-cta-sub { font-size: 20px; }
 }
 
 /* ========== NAV ========== */
