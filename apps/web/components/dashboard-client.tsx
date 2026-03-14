@@ -264,7 +264,7 @@ function RevisionDiff({ oldEntries, newEntries, oldLabel, newLabel }: {
   const unchanged = diff.filter((d) => d.kind === "unchanged");
 
   if (changes.length === 0) {
-    return <p className="muted" style={{ fontSize: 13, padding: "8px 0" }}>No differences.</p>;
+    return <p className="muted text-[13px] py-2">No differences.</p>;
   }
 
   const kindStyle: Record<DiffLineKind, React.CSSProperties> = {
@@ -282,35 +282,35 @@ function RevisionDiff({ oldEntries, newEntries, oldLabel, newLabel }: {
   };
 
   return (
-    <div style={{ fontSize: 13, fontFamily: "var(--font-mono)" }}>
-      <div style={{ display: "flex", gap: 16, marginBottom: 8, fontSize: 12 }}>
+    <div className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>
+      <div className="flex gap-4 mb-2 text-xs">
         <span className="muted">{oldLabel}</span>
         <span className="muted">{"\u2192"}</span>
         <span className="muted">{newLabel}</span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <div className="flex flex-col gap-px">
         {changes.map((line) => (
-          <div key={line.key} style={{ padding: "6px 10px", ...kindStyle[line.kind], display: "flex", gap: 8, alignItems: "baseline" }}>
-            <span style={{ width: 14, textAlign: "center", flexShrink: 0, fontWeight: 700, fontSize: 14 }}>{kindLabel[line.kind]}</span>
-            <span style={{ fontWeight: 600, minWidth: 120 }}>{line.key}</span>
+          <div key={line.key} className="px-[10px] py-[6px] flex gap-2 items-baseline" style={kindStyle[line.kind]}>
+            <span className="w-[14px] text-center shrink-0 font-bold text-sm">{kindLabel[line.kind]}</span>
+            <span className="font-semibold min-w-[120px]">{line.key}</span>
             {line.kind === "changed" && (
-              <span style={{ flex: 1, wordBreak: "break-all" }}>
-                <span style={{ color: "#c0392b", textDecoration: "line-through" }}>{line.oldValue}</span>
+              <span className="flex-1 break-all">
+                <span className="text-[#c0392b] line-through">{line.oldValue}</span>
                 {" "}
-                <span style={{ color: "#27ae60" }}>{line.newValue}</span>
+                <span className="text-[#27ae60]">{line.newValue}</span>
               </span>
             )}
             {line.kind === "removed" && (
-              <span style={{ flex: 1, color: "#c0392b", wordBreak: "break-all" }}>{line.oldValue}</span>
+              <span className="flex-1 text-[#c0392b] break-all">{line.oldValue}</span>
             )}
             {line.kind === "added" && (
-              <span style={{ flex: 1, color: "#27ae60", wordBreak: "break-all" }}>{line.newValue}</span>
+              <span className="flex-1 text-[#27ae60] break-all">{line.newValue}</span>
             )}
           </div>
         ))}
       </div>
       {unchanged.length > 0 && (
-        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>{unchanged.length} unchanged variable{unchanged.length !== 1 ? "s" : ""}</p>
+        <p className="muted text-xs mt-2">{unchanged.length} unchanged variable{unchanged.length !== 1 ? "s" : ""}</p>
       )}
     </div>
   );
@@ -868,7 +868,7 @@ export function DashboardClient() {
         <div className="sidebar-section">
           {loadingWorkspaces && (
             <>
-              <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "60%" }} />
+              <div className="sidebar-skeleton" /><div className="sidebar-skeleton w-[60%]" />
             </>
           )}
           {!loadingWorkspaces && (
@@ -878,7 +878,7 @@ export function DashboardClient() {
                 onClick={() => setShowWorkspaceSwitcher(!showWorkspaceSwitcher)}
               >
                 <IconBox size={14} />
-                <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>
+                <span className="flex-1 text-left font-semibold">
                   {selectedWorkspace?.name ?? "Select workspace"}
                 </span>
                 {selectedMembership && (
@@ -895,11 +895,11 @@ export function DashboardClient() {
                       onClick={() => { selectWorkspace(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); setMobileSidebarOpen(false); }}
                     >
                       <IconBox size={14} />
-                      <span style={{ flex: 1, textAlign: "left" }}>{w.workspace.name}</span>
+                      <span className="flex-1 text-left">{w.workspace.name}</span>
                       <span className="role-badge" data-role={w.membership.role}>{w.membership.role}</span>
                     </button>
                   ) : null)}
-                  <div className="divider" style={{ margin: "4px 0" }} />
+                  <div className="divider my-1" />
                   <button className="sidebar-item" onClick={() => { setModal("workspace"); setModalName(""); setShowWorkspaceSwitcher(false); }}>
                     <IconPlus size={14} /><span>New workspace</span>
                   </button>
@@ -912,11 +912,10 @@ export function DashboardClient() {
         {/* Project tree */}
         {selectedWorkspaceId && (
           <div className="sidebar-section">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px 8px" }}>
-              <span className="sidebar-section-label" style={{ padding: 0 }}>Projects</span>
+            <div className="flex items-center justify-between px-2 pb-2">
+              <span className="sidebar-section-label p-0">Projects</span>
               <button
-                className="icon-button"
-                style={{ width: 22, height: 22 }}
+                className="icon-button w-[22px] h-[22px]"
                 onClick={() => { setModal("project"); setModalName(""); }}
                 title="New project"
               >
@@ -925,10 +924,10 @@ export function DashboardClient() {
             </div>
             {loadingProjects && (
               <>
-                <div className="sidebar-skeleton" /><div className="sidebar-skeleton" style={{ width: "55%" }} />
+                <div className="sidebar-skeleton" /><div className="sidebar-skeleton w-[55%]" />
               </>
             )}
-            {!loadingProjects && projects.length === 0 && <span className="muted" style={{ fontSize: 13, padding: "0 12px" }}>No projects</span>}
+            {!loadingProjects && projects.length === 0 && <span className="muted text-[13px] px-3">No projects</span>}
             {projects.map((proj) => {
               const isExpanded = expandedProjects.has(proj.id);
               const projectEnvs = environments.filter(() => selectedProjectId === proj.id);
@@ -942,18 +941,18 @@ export function DashboardClient() {
                       setActiveView("secrets");
                     }}
                   >
-                    <span style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 120ms ease", display: "inline-flex" }}>
+                    <span className="inline-flex transition-transform duration-[120ms] ease-in-out" style={{ transform: isExpanded ? "rotate(90deg)" : "none" }}>
                       <IconChevron size={12} />
                     </span>
                     <IconFolder size={14} />
-                    <span style={{ flex: 1, textAlign: "left" }}>{proj.name}</span>
+                    <span className="flex-1 text-left">{proj.name}</span>
                   </button>
                   {/* Environments under project */}
                   {isExpanded && proj.id === selectedProjectId && (
                     <div className="sidebar-tree-children">
-                      {loadingEnvironments && <div className="sidebar-skeleton" style={{ width: "70%" }} />}
+                      {loadingEnvironments && <div className="sidebar-skeleton w-[70%]" />}
                       {!loadingEnvironments && projectEnvs.length === 0 && (
-                        <span className="muted" style={{ fontSize: 12, padding: "4px 12px 4px 8px", display: "block" }}>No environments</span>
+                        <span className="muted text-xs block py-1 pl-2 pr-3">No environments</span>
                       )}
                       {!loadingEnvironments && environments.map((env) => {
                         const meta = environmentsMeta.find((m) => m.environment.id === env.id);
@@ -961,15 +960,14 @@ export function DashboardClient() {
                         return (
                           <div key={env.id}>
                             <button
-                              className={`sidebar-item${isSelected ? " active" : ""}`}
-                              style={{ paddingLeft: 8 }}
+                              className={`sidebar-item${isSelected ? " active" : ""} pl-2`}
                               onClick={() => { selectEnvironment(env.id); setActiveView("secrets"); setMobileSidebarOpen(false); }}
                             >
                               <IconLayers size={13} />
-                              <span style={{ flex: 1, textAlign: "left" }}>{env.name}</span>
-                              <span style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+                              <span className="flex-1 text-left">{env.name}</span>
+                              <span className="flex items-center gap-[6px] ml-auto">
                                 {meta?.latestRevisionTimestamp && (
-                                  <span className="muted" style={{ fontSize: 10 }}>{formatRelativeTime(meta.latestRevisionTimestamp)}</span>
+                                  <span className="muted text-[10px]">{formatRelativeTime(meta.latestRevisionTimestamp)}</span>
                                 )}
                                 {isSelected && (isEnvUnlocked ? <IconUnlock size={11} /> : <IconLock size={11} />)}
                               </span>
@@ -980,12 +978,11 @@ export function DashboardClient() {
                                 {secretSets.map((ss) => (
                                   <button
                                     key={ss.id}
-                                    className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""}`}
-                                    style={{ fontSize: 12, padding: "3px 8px" }}
+                                    className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""} text-xs py-[3px] px-2`}
                                     onClick={() => selectSecretSet(ss.id)}
                                   >
                                     <IconFile size={11} />
-                                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{ss.filePath || ".env"}</span>
+                                    <span className="text-[11px]" style={{ fontFamily: "var(--font-mono)" }}>{ss.filePath || ".env"}</span>
                                   </button>
                                 ))}
                               </div>
@@ -994,8 +991,7 @@ export function DashboardClient() {
                         );
                       })}
                       <button
-                        className="sidebar-item"
-                        style={{ paddingLeft: 8, fontSize: 12, opacity: 0.7 }}
+                        className="sidebar-item pl-2 text-xs opacity-70"
                         onClick={() => { setModal("environment"); setModalName(""); setModalPassword(""); }}
                       >
                         <IconPlus size={11} /><span>New environment</span>
@@ -1009,21 +1005,20 @@ export function DashboardClient() {
         )}
 
         {/* Bottom section */}
-        <div style={{ marginTop: "auto" }}>
+        <div className="mt-auto">
           <div className="divider" />
           {selectedWorkspaceId && (
             <button
-              className={`sidebar-item${activeView === "settings" ? " active" : ""}`}
-              style={{ margin: "4px 10px", width: "calc(100% - 20px)" }}
+              className={`sidebar-item${activeView === "settings" ? " active" : ""} m-[4px_10px] w-[calc(100%-20px)]`}
               onClick={() => setActiveView(activeView === "settings" ? "secrets" : "settings")}
             >
               <IconSettings size={14} />
               <span>Workspace settings</span>
             </button>
           )}
-          <div style={{ padding: "8px 18px 12px", borderTop: "1px solid var(--sidebar-border)", display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="pt-2 px-[18px] pb-3 border-t border-[var(--sidebar-border)] flex items-center gap-[10px]">
             <UserButton appearance={{ elements: { avatarBox: { width: 28, height: 28 } } }} />
-            <span className="muted" style={{ fontSize: 12 }}>Account</span>
+            <span className="muted text-xs">Account</span>
           </div>
         </div>
       </aside>
@@ -1040,7 +1035,7 @@ export function DashboardClient() {
                 {activeView === "settings" && <><IconChevron size={12} /><span>Settings</span></>}
                 {activeView === "secrets" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
                 {activeView === "secrets" && selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
-                {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{selectedSecretSet.filePath || ".env"}</span></>}
+                {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><span className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>{selectedSecretSet.filePath || ".env"}</span></>}
               </>
             )}
             {!selectedWorkspace && !loadingWorkspaces && <span className="muted">Select a workspace to begin</span>}
@@ -1050,7 +1045,7 @@ export function DashboardClient() {
             {isEnvUnlocked && selectedEnvironment && (
               <>
                 <span className="tag encrypted"><IconShield size={12} /> E2E Encrypted</span>
-                <span className="tag" style={{ cursor: "pointer" }} onClick={handleLockEnv}><IconUnlock size={12} /> Unlocked</span>
+                <span className="tag cursor-pointer" onClick={handleLockEnv}><IconUnlock size={12} /> Unlocked</span>
               </>
             )}
             {!isEnvUnlocked && selectedEnvironment && secretSets.length > 0 && (
@@ -1061,30 +1056,30 @@ export function DashboardClient() {
 
         {/* SETTINGS VIEW */}
         {activeView === "settings" && selectedWorkspace && (
-          <div className="fade-in" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+          <div className="fade-in p-6 flex flex-col gap-6">
             {/* General */}
-            <div className="panel" style={{ padding: 20 }}>
-              <h3 style={{ marginBottom: 16 }}>General</h3>
-              <div style={{ display: "grid", gap: 12, fontSize: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="muted" style={{ width: 80 }}>Name</span>
-                  <span style={{ fontWeight: 600 }}>{selectedWorkspace.name}</span>
+            <div className="panel p-5">
+              <h3 className="mb-4">General</h3>
+              <div className="grid gap-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="muted w-[80px]">Name</span>
+                  <span className="font-semibold">{selectedWorkspace.name}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="muted" style={{ width: 80 }}>Slug</span>
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{selectedWorkspace.slug}</code>
+                <div className="flex items-center gap-3">
+                  <span className="muted w-[80px]">Slug</span>
+                  <code className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>{selectedWorkspace.slug}</code>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="muted" style={{ width: 80 }}>Type</span>
+                <div className="flex items-center gap-3">
+                  <span className="muted w-[80px]">Type</span>
                   <span className="tag">{selectedWorkspace.type}</span>
                 </div>
               </div>
             </div>
 
             {/* Members */}
-            <div className="panel" style={{ padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><IconUsers size={16} /> Members</h3>
+            <div className="panel p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="flex items-center gap-2"><IconUsers size={16} /> Members</h3>
                 {isOwnerOrAdmin && (
                   <button className="button sm" onClick={() => { setModal("invite"); setInviteEmail(""); setInviteRole("member"); setLastInviteLink(null); }}>
                     <IconPlus size={12} /> Invite
@@ -1092,7 +1087,7 @@ export function DashboardClient() {
                 )}
               </div>
               {loadingMembers && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 12 }}>
+                <div className="flex items-center gap-2 p-3">
                   <div className="spinner" /> <span className="muted">Loading members...</span>
                 </div>
               )}
@@ -1100,17 +1095,16 @@ export function DashboardClient() {
                 <div className="members-list">
                   {members.map((m) => (
                     <div key={m.id} className="member-row">
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{m.fullName || "Unknown"}</div>
-                        <div className="muted" style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{m.email || m.userId}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm">{m.fullName || "Unknown"}</div>
+                        <div className="muted text-xs" style={{ fontFamily: "var(--font-mono)" }}>{m.email || m.userId}</div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div className="flex items-center gap-2">
                         {m.role === "owner" ? (
                           <span className="role-badge" data-role="owner">owner</span>
                         ) : isOwner ? (
                           <select
-                            className="select"
-                            style={{ width: "auto", fontSize: 12, padding: "4px 28px 4px 8px", border: "2px solid var(--border-light)" }}
+                            className="select w-auto text-xs py-1 pr-7 pl-2 border-2 border-[var(--border-light)]"
                             value={m.role}
                             onChange={(e) => handleUpdateMemberRole(m.id, e.target.value)}
                           >
@@ -1123,8 +1117,7 @@ export function DashboardClient() {
                         )}
                         {isOwnerOrAdmin && m.role !== "owner" && (
                           <button
-                            className="icon-button"
-                            style={{ color: "var(--error)" }}
+                            className="icon-button text-[var(--error)]"
                             onClick={() => handleRemoveMember(m.id, m.fullName || m.email || "this member")}
                             title="Remove member"
                           >
@@ -1140,22 +1133,21 @@ export function DashboardClient() {
 
             {/* Pending Invites */}
             {isOwnerOrAdmin && pendingInvites.length > 0 && (
-              <div className="panel" style={{ padding: 20 }}>
-                <h3 style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><IconMail size={16} /> Pending invites</h3>
+              <div className="panel p-5">
+                <h3 className="flex items-center gap-2 mb-4"><IconMail size={16} /> Pending invites</h3>
                 <div className="members-list">
                   {pendingInvites.map((inv) => (
                     <div key={inv.id} className="member-row">
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, fontFamily: "var(--font-mono)" }}>{inv.email}</div>
-                        <div className="muted" style={{ fontSize: 12 }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm" style={{ fontFamily: "var(--font-mono)" }}>{inv.email}</div>
+                        <div className="muted text-xs">
                           Invited {formatRelativeTime(inv.createdAt)} &middot; Expires {new Date(inv.expiresAt).toLocaleDateString()}
                         </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div className="flex items-center gap-2">
                         <span className="role-badge" data-role={inv.role}>{inv.role}</span>
                         <button
-                          className="icon-button"
-                          style={{ color: "var(--error)" }}
+                          className="icon-button text-[var(--error)]"
                           onClick={() => handleCancelInvite(inv.id)}
                           title="Cancel invite"
                         >
@@ -1174,7 +1166,7 @@ export function DashboardClient() {
         {activeView === "secrets" && loadingWorkspaces && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
-            <p className="muted" style={{ marginTop: 16 }}>Loading your workspaces...</p>
+            <p className="muted mt-4">Loading your workspaces...</p>
           </div>
         )}
 
@@ -1182,7 +1174,7 @@ export function DashboardClient() {
         {activeView === "secrets" && !loadingWorkspaces && selectedWorkspaceId && loadingProjects && !selectedProjectId && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
-            <p className="muted" style={{ marginTop: 16 }}>Loading projects...</p>
+            <p className="muted mt-4">Loading projects...</p>
           </div>
         )}
 
@@ -1190,7 +1182,7 @@ export function DashboardClient() {
         {activeView === "secrets" && !loadingWorkspaces && !loadingProjects && selectedProjectId && loadingEnvironments && !selectedEnvironmentId && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
-            <p className="muted" style={{ marginTop: 16 }}>Loading environments...</p>
+            <p className="muted mt-4">Loading environments...</p>
           </div>
         )}
 
@@ -1198,42 +1190,24 @@ export function DashboardClient() {
         {activeView === "secrets" && !loadingWorkspaces && selectedEnvironmentId && loadingSecrets && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
-            <p className="muted" style={{ marginTop: 16 }}>Loading secrets...</p>
+            <p className="muted mt-4">Loading secrets...</p>
           </div>
         )}
 
         {/* No workspaces — only show after loading completes */}
         {activeView === "secrets" && !loadingWorkspaces && workspaces.length === 0 && (
           <div className="empty-state fade-in">
-            <div style={{
-              width: 72,
-              height: 72,
-              border: "3px solid var(--border)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 24,
-            }}>
+            <div className="w-[72px] h-[72px] border-[3px] border-[var(--border)] flex items-center justify-center mb-6">
               <IconShield size={32} />
             </div>
-            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontFamily: "var(--font-heading)", fontWeight: 800 }}>No workspaces yet</h2>
-            <p className="muted" style={{ maxWidth: 380, lineHeight: 1.6, margin: "0 auto 28px", fontSize: 14 }}>
+            <h2 className="m-0 mb-2 text-xl font-extrabold" style={{ fontFamily: "var(--font-heading)" }}>No workspaces yet</h2>
+            <p className="muted max-w-[380px] leading-relaxed mx-auto mb-7 text-sm">
               Create a workspace to start syncing encrypted environment variables across your team.
             </p>
             <button
-              className="button"
+              className="button px-7 py-[14px] text-sm font-bold uppercase tracking-[0.08em] inline-flex items-center gap-2"
               onClick={() => { setModal("workspace"); setModalName(""); }}
-              style={{
-                padding: "14px 28px",
-                fontSize: 14,
-                fontFamily: "var(--font-mono)",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-              }}
+              style={{ fontFamily: "var(--font-mono)" }}
             >
               <IconPlus size={14} /> New workspace
             </button>
@@ -1243,19 +1217,11 @@ export function DashboardClient() {
         {/* No environment selected */}
         {activeView === "secrets" && !loadingWorkspaces && !loadingProjects && !loadingEnvironments && workspaces.length > 0 && !selectedEnvironmentId && (
           <div className="empty-state fade-in">
-            <div style={{
-              width: 56,
-              height: 56,
-              border: "3px solid var(--border)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 20,
-            }}>
+            <div className="w-[56px] h-[56px] border-[3px] border-[var(--border)] flex items-center justify-center mb-5">
               <IconLayers size={24} />
             </div>
-            <h3 style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 17 }}>No environment selected</h3>
-            <p className="muted" style={{ fontSize: 13 }}>Select or create an environment from the sidebar.</p>
+            <h3 className="m-0 mb-[6px] font-bold text-[17px]" style={{ fontFamily: "var(--font-heading)" }}>No environment selected</h3>
+            <p className="muted text-[13px]">Select or create an environment from the sidebar.</p>
           </div>
         )}
 
@@ -1263,12 +1229,12 @@ export function DashboardClient() {
         {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length > 0 && !isEnvUnlocked && (
           <div className="lock-screen fade-in">
             <div className="lock-icon"><IconLock size={32} /></div>
-            <h2 style={{ marginBottom: 8 }}>Enter environment password</h2>
-            <p className="muted" style={{ maxWidth: 380, lineHeight: 1.6, marginBottom: 20 }}>
+            <h2 className="mb-2">Enter environment password</h2>
+            <p className="muted max-w-[380px] leading-relaxed mb-5">
               This environment's secrets are encrypted. Enter the password to decrypt and view them.
             </p>
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-end", maxWidth: 400 }}>
-              <div className="field" style={{ flex: 1, position: "relative" }}>
+            <div className="flex gap-2 items-end max-w-[400px]">
+              <div className="field flex-1 relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={envPassword}
@@ -1278,9 +1244,8 @@ export function DashboardClient() {
                   autoFocus
                 />
                 <button
-                  className="icon-button"
+                  className="icon-button absolute right-1 top-1/2 -translate-y-1/2"
                   onClick={() => setShowPassword(!showPassword)}
-                  style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)" }}
                   type="button"
                 >
                   {showPassword ? <IconEyeOff size={14} /> : <IconEye size={14} />}
@@ -1291,7 +1256,7 @@ export function DashboardClient() {
               </button>
             </div>
             {!latestRevision && (
-              <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>No secrets pushed yet. Unlock to start adding variables.</p>
+              <p className="muted mt-3 text-xs">No secrets pushed yet. Unlock to start adding variables.</p>
             )}
           </div>
         )}
@@ -1300,7 +1265,7 @@ export function DashboardClient() {
         {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length === 0 && (
           <div className="empty-state fade-in">
             <IconShield size={40} />
-            <h3 style={{ margin: "12px 0 4px" }}>No secret set</h3>
+            <h3 className="mt-3 mb-1">No secret set</h3>
             <p className="muted">This environment is missing its secret store. Try recreating it.</p>
           </div>
         )}
@@ -1317,12 +1282,12 @@ export function DashboardClient() {
                       </button>
                     ))}
                   </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div className="flex gap-[6px] items-center">
                     <input className="ed1-search" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="Filter..." spellCheck={false} />
                     <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)} title={maskedValues ? "Reveal values" : "Mask values"}>
                       {maskedValues ? <IconEye size={14} /> : <IconEyeOff size={14} />}
                     </button>
-                    {dirtyFlag && <span className="tag" style={{ fontSize: 10 }}>unsaved</span>}
+                    {dirtyFlag && <span className="tag text-[10px]">unsaved</span>}
                     <button className="button sm" onClick={handleSaveRevision} disabled={isPending || envEntries.length === 0}>
                       {isPending ? "Saving..." : "Save"}
                     </button>
@@ -1332,12 +1297,12 @@ export function DashboardClient() {
                 {/* Revision viewing banner */}
                 {isViewingRevision && viewingRevision && (
                   <div className="ed-rev-banner">
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="flex items-center gap-2">
                       <IconClock size={14} />
                       <strong>Viewing r{viewingRevision.revision}</strong>
                       <span className="muted">({formatRelativeTime(viewingRevision.createdAt)})</span>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div className="flex items-center gap-[6px]">
                       <button className={`ed-rev-mode-btn${revisionViewMode === "diff" ? " active" : ""}`} onClick={() => setRevisionViewMode("diff")}>Diff</button>
                       <button className={`ed-rev-mode-btn${revisionViewMode === "snapshot" ? " active" : ""}`} onClick={() => setRevisionViewMode("snapshot")}>Snapshot</button>
                       {diffStats && revisionViewMode === "diff" && (
@@ -1378,10 +1343,10 @@ export function DashboardClient() {
                   <div className="ed1-body">
                     <div className="ed-diff-header-row">
                       <span className="ed1-linenum" />
-                      <span style={{ flex: 1, fontWeight: 700 }}>Key</span>
-                      <span style={{ flex: 1 }}>r{viewingRevision?.revision} (old)</span>
+                      <span className="flex-1 font-bold">Key</span>
+                      <span className="flex-1">r{viewingRevision?.revision} (old)</span>
                       <span className="ed-diff-arrow" />
-                      <span style={{ flex: 1 }}>Current</span>
+                      <span className="flex-1">Current</span>
                     </div>
                     {diffViewEntries.map((d, i) => (
                       <div className={`ed1-line ed-diff-line ed-diff-${d.kind}`} key={d.key + i}>
@@ -1403,9 +1368,9 @@ export function DashboardClient() {
                     {viewingRevisionEntries.map((entry, i) => (
                       <div className="ed1-line ed-snapshot-line" key={i}>
                         <span className="ed1-linenum">{i + 1}</span>
-                        <span className="ed1-key" style={{ flex: 1, padding: "6px 8px" }}>{entry.key}</span>
+                        <span className="ed1-key flex-1 py-[6px] px-2">{entry.key}</span>
                         <span className="ed1-eq">=</span>
-                        <span className="ed1-val" style={{ flex: 2, padding: "6px 8px" }}>{maskedValues ? maskVal(entry.value) : entry.value}</span>
+                        <span className="ed1-val flex-[2] py-[6px] px-2">{maskedValues ? maskVal(entry.value) : entry.value}</span>
                       </div>
                     ))}
                   </div>
@@ -1413,9 +1378,9 @@ export function DashboardClient() {
 
                 {/* Loading revision */}
                 {loadingRevision && (
-                  <div className="ed1-body" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div className="ed1-body flex items-center justify-center">
                     <div className="spinner" />
-                    <span className="muted" style={{ marginLeft: 8 }}>Decrypting revision...</span>
+                    <span className="muted ml-2">Decrypting revision...</span>
                   </div>
                 )}
 
@@ -1424,14 +1389,14 @@ export function DashboardClient() {
                   <span>{selectedSecretSet.filePath || ".env"}</span>
                   <span>{envEntries.length} variable{envEntries.length !== 1 ? "s" : ""}</span>
                   {latestRevision && <span>r{latestRevision.revision}</span>}
-                  <span className="tag encrypted" style={{ fontSize: 9, padding: "1px 5px" }}>E2E</span>
+                  <span className="tag encrypted text-[9px] py-px px-[5px]">E2E</span>
                 </div>
 
                 {/* History rail */}
                 {history.length > 0 && (
                   <div className="ed1-history">
                     <span className="ed1-history-label">History</span>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    <div className="flex gap-1 flex-wrap">
                       {history.map((rev) => {
                         const isCurrent = rev.id === latestRevision?.id;
                         const isViewing = viewingRevisionId === rev.id;
@@ -1439,7 +1404,7 @@ export function DashboardClient() {
                           <button key={rev.id} className={`ed1-rev${isCurrent ? " current" : ""}${isViewing ? " expanded" : ""}`} onClick={() => { if (!isCurrent) handleViewRevision(rev, "diff"); }}>
                             <strong>r{rev.revision}</strong>
                             <span className="muted">{formatRelativeTime(rev.createdAt)}</span>
-                            {isCurrent && <span className="tag encrypted" style={{ fontSize: 9 }}>live</span>}
+                            {isCurrent && <span className="tag encrypted text-[9px]">live</span>}
                           </button>
                         );
                       })}
@@ -1473,7 +1438,7 @@ export function DashboardClient() {
                       }}
                     />
                   </div>
-                  {modalName.trim() && <p className="muted" style={{ fontSize: 13 }}>Slug: <code>{toSlug(modalName)}</code></p>}
+                  {modalName.trim() && <p className="muted text-[13px]">Slug: <code>{toSlug(modalName)}</code></p>}
                 </>
               )}
 
@@ -1490,7 +1455,7 @@ export function DashboardClient() {
                       if (e.key === "Enter" && modalName.trim() && modalPassword.trim()) handleModalSubmit();
                     }}
                   />
-                  <span className="muted" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                  <span className="muted text-xs leading-[1.4]">
                     This password encrypts all secrets in this environment. Without it, nobody — including us — can read them.
                   </span>
                 </div>
@@ -1519,10 +1484,10 @@ export function DashboardClient() {
                     </select>
                   </div>
                   {lastInviteLink && (
-                    <div style={{ padding: 12, background: "var(--surface-hover)", border: "2px solid var(--border-light)" }}>
-                      <span className="muted" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>Invite link (share with the user):</span>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <code style={{ fontFamily: "var(--font-mono)", fontSize: 11, flex: 1, wordBreak: "break-all" }}>{lastInviteLink}</code>
+                    <div className="p-3 bg-[var(--surface-hover)] border-2 border-[var(--border-light)]">
+                      <span className="muted text-xs block mb-[6px]">Invite link (share with the user):</span>
+                      <div className="flex gap-[6px] items-center">
+                        <code className="text-[11px] flex-1 break-all" style={{ fontFamily: "var(--font-mono)" }}>{lastInviteLink}</code>
                         <button
                           className="icon-button"
                           onClick={() => { void navigator.clipboard.writeText(lastInviteLink); pushToast("Copied to clipboard.", "success"); }}
@@ -1536,7 +1501,7 @@ export function DashboardClient() {
                 </>
               )}
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+              <div className="flex gap-2 justify-end mt-2">
                 <button className="button secondary" onClick={() => setModal(null)}>Cancel</button>
                 {modal !== "invite" ? (
                   <button
@@ -1564,21 +1529,20 @@ export function DashboardClient() {
       {/* CONFIRM DIALOG */}
       {confirmAction && (
         <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
-          <div className="modal panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+          <div className="modal panel max-w-[440px]" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <strong>{confirmAction.title}</strong>
               <button className="icon-button" onClick={() => setConfirmAction(null)}><IconX size={16} /></button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 20px", color: "var(--fg)" }}>
+              <p className="text-sm leading-relaxed m-0 mb-5 text-[var(--fg)]">
                 {confirmAction.message}
               </p>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <div className="flex gap-2 justify-end">
                 <button className="button secondary" onClick={() => setConfirmAction(null)}>Cancel</button>
                 <button
-                  className="button"
+                  className={`button${confirmAction.destructive ? " bg-[#c0392b] border-[#c0392b]" : ""}`}
                   onClick={confirmAction.onConfirm}
-                  style={confirmAction.destructive ? { background: "#c0392b", borderColor: "#c0392b" } : undefined}
                 >
                   {confirmAction.destructive ? "Restore" : "Save"}
                 </button>
@@ -1590,14 +1554,12 @@ export function DashboardClient() {
 
       {/* TOASTS */}
       {toasts.length > 0 && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, display: "flex", flexDirection: "column", gap: 8, zIndex: 1000, pointerEvents: "none" }}>
+        <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-[1000] pointer-events-none">
           {toasts.map((t) => (
-            <div key={t.id} className="panel fade-in" style={{
-              padding: "12px 16px", borderRadius: 12, fontSize: 14, display: "flex", alignItems: "center", gap: 8,
-              pointerEvents: "auto", maxWidth: 380,
+            <div key={t.id} className="panel fade-in py-3 px-4 rounded-xl text-sm flex items-center gap-2 pointer-events-auto max-w-[380px]" style={{
               borderLeft: `4px solid ${t.variant === "error" ? "#c0392b" : t.variant === "success" ? "var(--accent)" : "var(--muted)"}`
             }}>
-              <span style={{ flex: 1 }}>{t.message}</span>
+              <span className="flex-1">{t.message}</span>
               <button className="icon-button" onClick={() => setToasts((p) => p.filter((x) => x.id !== t.id))}><IconX size={14} /></button>
             </div>
           ))}
