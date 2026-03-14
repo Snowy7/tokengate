@@ -253,8 +253,8 @@ export default function MarketingPage() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
-  height: 64px;
+  padding: 0 clamp(24px, 3vw, 200px);
+  height: clamp(56px, 3.5vw, 96px);
   background: var(--tg-bg);
   border-bottom: 3px solid var(--tg-border);
 }
@@ -313,7 +313,7 @@ export default function MarketingPage() {
 
 .tg-nav-link {
   font-family: var(--tg-font-mono);
-  font-size: 14px;
+  font-size: clamp(12px, 0.5vw, 22px);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -332,13 +332,13 @@ export default function MarketingPage() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
+  padding: clamp(8px, 0.6vw, 20px) clamp(16px, 1.2vw, 44px);
   background: var(--tg-green);
   color: #000;
   border: 3px solid var(--tg-border);
   font-family: var(--tg-font-mono);
   font-weight: 700;
-  font-size: 14px;
+  font-size: clamp(12px, 0.5vw, 22px);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   cursor: pointer;
@@ -360,20 +360,21 @@ export default function MarketingPage() {
 .tg-hero {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 48px;
-  max-width: 1280px;
+  gap: clamp(32px, 3vw, 80px);
+  max-width: min(1280px, 80vw);
   margin: 0 auto;
-  padding: 80px 32px 64px;
+  padding: clamp(48px, 5vh, 140px) clamp(24px, 3vw, 80px) clamp(40px, 4vh, 120px);
   align-items: center;
+  min-height: calc(100vh - 64px);
 }
 
 .tg-hero-headline {
   font-family: var(--tg-font-mono);
-  font-size: clamp(2.5rem, 5.5vw, 5rem);
+  font-size: clamp(2.5rem, 3.5vw, 10rem);
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.03em;
-  margin: 0 0 24px;
+  margin: 0 0 clamp(16px, 1.5vw, 40px);
 }
 
 .tg-hero-headline span {
@@ -382,16 +383,16 @@ export default function MarketingPage() {
 
 .tg-hero-sub {
   font-family: var(--tg-font-mono);
-  font-size: 14px;
+  font-size: clamp(13px, 0.8vw, 26px);
   color: var(--tg-text-secondary);
   line-height: 1.6;
-  max-width: 420px;
-  margin: 0 0 32px;
+  max-width: clamp(320px, 28vw, 720px);
+  margin: 0 0 clamp(24px, 2vw, 48px);
 }
 
 .tg-hero-actions {
   display: flex;
-  gap: 16px;
+  gap: clamp(12px, 1vw, 24px);
   flex-wrap: wrap;
 }
 
@@ -437,9 +438,9 @@ export default function MarketingPage() {
 }
 
 .tg-terminal-body {
-  padding: 20px;
+  padding: clamp(16px, 1.5vw, 40px);
   font-family: var(--tg-font-mono);
-  font-size: 13px;
+  font-size: clamp(12px, 0.5vw, 20px);
   line-height: 1.7;
   color: var(--tg-terminal-text);
   overflow-x: auto;
@@ -484,27 +485,31 @@ export default function MarketingPage() {
 
 /* ========== SECTION SHARED ========== */
 .tg-section {
-  max-width: 1280px;
+  max-width: min(1280px, 80vw);
   margin: 0 auto;
-  padding: 64px 32px;
+  padding: clamp(48px, 5vh, 120px) clamp(24px, 3vw, 80px);
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .tg-section-label {
   font-family: var(--tg-font-mono);
-  font-size: 12px;
+  font-size: clamp(11px, 0.4vw, 18px);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--tg-green);
-  margin: 0 0 16px;
+  margin: 0 0 clamp(12px, 1vw, 24px);
 }
 
 .tg-section-title {
   font-family: var(--tg-font-mono);
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-size: clamp(1.5rem, 1.8vw, 4rem);
   font-weight: 700;
   line-height: 1.15;
-  margin: 0 0 48px;
+  margin: 0 0 clamp(32px, 2.5vw, 64px);
 }
 
 /* ========== FILE SYNC VISUAL ========== */
@@ -525,7 +530,7 @@ export default function MarketingPage() {
   background: var(--tg-surface);
   border: 3px solid var(--tg-border);
   padding: 0;
-  min-height: 320px;
+  min-height: clamp(260px, 20vw, 500px);
 }
 
 .tg-sync-panel-header {
@@ -640,12 +645,18 @@ export default function MarketingPage() {
   background: var(--tg-terminal-bg);
   border-top: 3px solid var(--tg-border);
   border-bottom: 3px solid var(--tg-border);
-  padding: 64px 32px;
+  padding: clamp(48px, 5vh, 120px) clamp(24px, 3vw, 80px);
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .tg-encrypt-inner {
-  max-width: 1280px;
+  max-width: min(1280px, 80vw);
   margin: 0 auto;
+  width: 100%;
 }
 
 .tg-encrypt-flow {
@@ -657,8 +668,9 @@ export default function MarketingPage() {
 
 .tg-encrypt-panel {
   border: 3px solid #333;
-  padding: 24px;
-  min-height: 220px;
+  padding: clamp(16px, 1.5vw, 44px);
+  min-height: clamp(180px, 14vw, 400px);
+  font-size: clamp(12px, 0.45vw, 18px);
 }
 
 .tg-encrypt-panel-label {
@@ -723,11 +735,11 @@ export default function MarketingPage() {
 
 .tg-encrypt-tagline {
   font-family: var(--tg-font-mono);
-  font-size: 14px;
+  font-size: clamp(13px, 0.5vw, 24px);
   color: var(--tg-terminal-text);
   text-align: center;
-  max-width: 600px;
-  margin: 40px auto 0;
+  max-width: clamp(400px, 40vw, 900px);
+  margin: clamp(24px, 2vw, 56px) auto 0;
   line-height: 1.6;
 }
 
@@ -744,7 +756,7 @@ export default function MarketingPage() {
 }
 
 .tg-stat-cell {
-  padding: 32px 24px;
+  padding: clamp(24px, 2vw, 56px) clamp(16px, 1.5vw, 40px);
   text-align: center;
   border-right: 3px solid var(--tg-border);
   background: var(--tg-bg);
@@ -756,7 +768,7 @@ export default function MarketingPage() {
 
 .tg-stat-value {
   font-family: var(--tg-font-mono);
-  font-size: clamp(1.1rem, 2vw, 1.5rem);
+  font-size: clamp(1.1rem, 1.5vw, 4rem);
   font-weight: 700;
   color: var(--tg-text);
   margin: 0 0 4px;
@@ -765,7 +777,7 @@ export default function MarketingPage() {
 
 .tg-stat-label {
   font-family: var(--tg-font-mono);
-  font-size: 10px;
+  font-size: clamp(9px, 0.4vw, 18px);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
@@ -777,24 +789,29 @@ export default function MarketingPage() {
   background: var(--tg-green);
   border-top: 4px solid var(--tg-border);
   border-bottom: 4px solid var(--tg-border);
-  padding: 80px 32px;
+  padding: clamp(60px, 6vh, 160px) clamp(24px, 3vw, 200px);
   text-align: center;
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .tg-cta-headline {
   font-family: var(--tg-font-mono);
-  font-size: clamp(2rem, 5vw, 4rem);
+  font-size: clamp(2rem, 2.2vw, 6rem);
   font-weight: 700;
   color: #000;
-  margin: 0 0 32px;
+  margin: 0 0 clamp(24px, 2vw, 48px);
   letter-spacing: -0.03em;
 }
 
 .tg-cta-actions {
   display: flex;
   justify-content: center;
-  gap: 16px;
-  margin-bottom: 48px;
+  gap: clamp(12px, 1vw, 24px);
+  margin-bottom: clamp(32px, 3vw, 64px);
   flex-wrap: wrap;
 }
 
@@ -818,7 +835,7 @@ export default function MarketingPage() {
 /* ========== FOOTER ========== */
 .tg-footer {
   border-top: 3px solid var(--tg-border);
-  padding: 32px;
+  padding: clamp(24px, 2vw, 56px) clamp(24px, 3vw, 200px);
   display: flex;
   align-items: center;
   justify-content: space-between;
