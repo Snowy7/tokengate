@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@tokengate/crypto": "workspace:*",
+    "@tokengate/env": "workspace:*",
     "@tokengate/env-format": "workspace:*",
     "@tokengate/sdk": "workspace:*",
     "@clack/prompts": "^1.1.0",

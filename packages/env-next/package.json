@@ -1,0 +1,21 @@
+{
+  "name": "@tokengate/env-next",
+  "version": "0.1.0",
+  "description": "Tokengate environment variable integration for Next.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0"
+  },
+  "dependencies": {
+    "@tokengate/env": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Snowy7/tokengate.git",
+    "directory": "packages/env-next"
+  }
+}

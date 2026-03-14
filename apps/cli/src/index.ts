@@ -169,6 +169,11 @@ async function main(cmd: string | undefined, argv: string[]) {
       return handlePull();
     case "history":
       return handleHistory();
+    case "generate-types":
+    case "types":
+      return handleGenerateTypes();
+    case "scan":
+      return handleScan();
     case "help":
     case "--help":
     case "-h":
@@ -202,6 +207,7 @@ async function handleDefault() {
       { value: "push", label: "Push env files to remote" },
       { value: "pull", label: "Pull env files from remote" },
       { value: "history", label: "View revision history" },
+      { value: "scan", label: "Scan for leaked secrets" },
       { value: "status", label: "Show status" },
       { value: "init", label: "Re-initialize / switch environment" }
     ]
@@ -215,6 +221,8 @@ async function handleDefault() {
       return handlePull();
     case "history":
       return handleHistory();
+    case "scan":
+      return handleScan();
     case "status":
       return handleStatus();
     case "init":
@@ -1758,6 +1766,246 @@ async function openInBrowser(url: string) {
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// Generate types
+// ---------------------------------------------------------------------------
+
+async function handleGenerateTypes() {
+  p.intro(`${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim("generate-types")}`);
+
+  const configPath = resolve(process.cwd(), "tokengate.config.ts");
+  const configPathJs = resolve(process.cwd(), "tokengate.config.js");
+  const configPathMts = resolve(process.cwd(), "tokengate.config.mts");
+
+  let configFile = "";
+  if (existsSync(configPath)) configFile = configPath;
+  else if (existsSync(configPathMts)) configFile = configPathMts;
+  else if (existsSync(configPathJs)) configFile = configPathJs;
+
+  if (!configFile) {
+    p.log.error("No tokengate.config.ts found in project root.");
+    p.log.info(`Create one with:\n\n${pc.cyan(`import { defineConfig } from '@tokengate/env'\n\nexport default defineConfig({\n  schema: {\n    DATABASE_URL: { type: 'string', required: true },\n    PORT: { type: 'port', default: 3000 },\n  }\n})`)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const spinner = p.spinner();
+  spinner.start("Loading config");
+
+  try {
+    // Dynamic import the config
+    const mod = await import(configFile);
+    const config = mod.default ?? mod;
+
+    if (!config?.schema) {
+      spinner.stop("Error");
+      p.log.error("Config file does not export a schema.");
+      process.exitCode = 1;
+      return;
+    }
+
+    const { generateTypes, generateExample } = await import("@tokengate/env/typegen");
+
+    // Generate .d.ts
+    const dts = generateTypes(config.schema);
+    const dtsPath = resolve(process.cwd(), "env.d.ts");
+    await writeFile(dtsPath, dts);
+
+    // Generate .env.example
+    const example = generateExample(config.schema);
+    const examplePath = resolve(process.cwd(), ".env.example");
+    await writeFile(examplePath, example);
+
+    spinner.stop("Generated.");
+
+    const keys = Object.keys(config.schema);
+    p.log.success(`${pc.bold("env.d.ts")} — ${keys.length} typed variable${keys.length !== 1 ? "s" : ""}`);
+    p.log.success(`${pc.bold(".env.example")} — template with defaults`);
+
+    p.outro("Done");
+  } catch (err) {
+    spinner.stop("Error");
+    p.log.error(err instanceof Error ? err.message : "Failed to generate types.");
+    process.exitCode = 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scan for leaked secrets
+// ---------------------------------------------------------------------------
+
+interface ScanResult {
+  file: string;
+  line: number;
+  column: number;
+  key: string;
+  snippet: string;
+}
+
+async function handleScan() {
+  p.intro(`${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim("scan")}`);
+
+  const local = loadLocalConfig();
+  if (!local) {
+    p.log.error(`No ${LOCAL_CONFIG_FILE} found. Run ${pc.cyan("tokengate init")} first.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = await requireAuth();
+  const client = getClient(config);
+
+  // Gather all known secret values from mapped env files
+  const spinner = p.spinner();
+  spinner.start("Loading secrets for scanning");
+
+  const secretValues = new Map<string, string>(); // value → key name
+
+  for (const [file, mapping] of Object.entries(local.mappings)) {
+    const filePath = resolve(process.cwd(), file);
+    if (!existsSync(filePath)) continue;
+
+    const content = await readFile(filePath, "utf8");
+    const lines = content.split("\n");
+
+    for (const line of lines) {
+      const match = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.+)$/);
+      if (!match) continue;
+      const [, key, value] = match;
+      const trimmed = value.trim().replace(/^["']|["']$/g, "");
+      // Only scan for values that look like real secrets (min length, not defaults)
+      if (trimmed.length >= 8 && !/^(true|false|localhost|127\.0\.0\.1|0\.0\.0\.0|\d+)$/i.test(trimmed)) {
+        secretValues.set(trimmed, key);
+      }
+    }
+  }
+
+  if (secretValues.size === 0) {
+    spinner.stop("No secrets found to scan for.");
+    p.log.info("Push some .env files first, then run scan.");
+    p.outro("Done");
+    return;
+  }
+
+  spinner.stop(`Found ${pc.bold(String(secretValues.size))} secret value${secretValues.size !== 1 ? "s" : ""} to scan for.`);
+
+  // Scan all source files for leaked values
+  const scanSpinner = p.spinner();
+  scanSpinner.start("Scanning codebase");
+
+  const SCAN_EXTENSIONS = new Set([
+    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+    ".py", ".rb", ".go", ".rs", ".java", ".kt",
+    ".yaml", ".yml", ".toml", ".json", ".xml",
+    ".sh", ".bash", ".zsh",
+    ".md", ".txt", ".cfg", ".ini", ".conf",
+    ".html", ".css", ".scss",
+    ".dockerfile", ".tf", ".hcl",
+  ]);
+
+  const SKIP_DIRS = new Set([
+    "node_modules", ".git", ".next", "dist", "build", ".turbo",
+    ".vercel", ".output", "__pycache__", ".venv", "venv",
+    "target", "vendor", ".terraform", "coverage",
+    ".tokengate",
+  ]);
+
+  const SKIP_FILES = new Set([
+    "package-lock.json", "bun.lock", "yarn.lock", "pnpm-lock.yaml",
+  ]);
+
+  const results: ScanResult[] = [];
+
+  function scanDir(dir: string) {
+    try {
+      const entries = readdirSync(dir);
+      for (const entry of entries) {
+        const fullPath = join(dir, entry);
+        try {
+          const stat = statSync(fullPath);
+          if (stat.isDirectory()) {
+            if (!SKIP_DIRS.has(entry) && !entry.startsWith(".env")) {
+              scanDir(fullPath);
+            }
+            continue;
+          }
+
+          // Skip non-source files
+          const ext = "." + entry.split(".").pop()?.toLowerCase();
+          if (!SCAN_EXTENSIONS.has(ext)) continue;
+          if (SKIP_FILES.has(entry)) continue;
+
+          // Skip .env files themselves
+          if (/^\.env(\..+)?$/.test(entry)) continue;
+
+          // Read and search
+          const content = require("node:fs").readFileSync(fullPath, "utf8") as string;
+          const lines = content.split("\n");
+
+          for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+            const line = lines[lineIdx];
+            for (const [secret, keyName] of secretValues) {
+              const col = line.indexOf(secret);
+              if (col !== -1) {
+                // Make sure it's not in a .env reference or import
+                const relPath = relative(process.cwd(), fullPath).replace(/\\/g, "/");
+                results.push({
+                  file: relPath,
+                  line: lineIdx + 1,
+                  column: col + 1,
+                  key: keyName,
+                  snippet: line.trim().slice(0, 120),
+                });
+              }
+            }
+          }
+        } catch {
+          // Skip files we can't read
+        }
+      }
+    } catch {
+      // Skip dirs we can't read
+    }
+  }
+
+  scanDir(process.cwd());
+  scanSpinner.stop(`Scanned codebase.`);
+
+  if (results.length === 0) {
+    p.log.success(pc.green("No leaked secrets found."));
+    p.outro("Clean");
+    return;
+  }
+
+  // Report findings
+  p.log.error(pc.red(`Found ${results.length} potential leak${results.length !== 1 ? "s" : ""}:`));
+  p.log.message("");
+
+  // Group by file
+  const byFile = new Map<string, ScanResult[]>();
+  for (const r of results) {
+    if (!byFile.has(r.file)) byFile.set(r.file, []);
+    byFile.get(r.file)!.push(r);
+  }
+
+  for (const [file, fileResults] of byFile) {
+    p.log.message(`  ${pc.bold(file)}`);
+    for (const r of fileResults) {
+      p.log.message(
+        `    ${pc.dim(`L${r.line}:${r.column}`)} ${pc.red(r.key)} leaked: ${pc.dim(r.snippet.slice(0, 80))}`,
+      );
+    }
+    p.log.message("");
+  }
+
+  p.log.warn(
+    `${pc.bold("Action:")} Remove hardcoded secrets and use ${pc.cyan("process.env")} or ${pc.cyan("@tokengate/env")} instead.`,
+  );
+
+  process.exitCode = 1;
+  p.outro(`${results.length} leak${results.length !== 1 ? "s" : ""} found`);
+}
+
 function printHelp() {
   p.intro(`${pc.bgCyan(pc.black(" tokengate "))} ${pc.dim("CLI")}`);
 
@@ -1775,6 +2023,8 @@ function printHelp() {
     ${pc.cyan("push")}               Select & push env files (shows change status)
     ${pc.cyan("pull")}               Select & pull env files (shows remote status)
     ${pc.cyan("history")}            Show revision history
+    ${pc.cyan("generate-types")}     Generate TypeScript types from tokengate.config.ts
+    ${pc.cyan("scan")}               Scan codebase for leaked secrets
 
   ${pc.bold("How it works")}
     1. Run ${pc.cyan("tokengate init")} in your project root
