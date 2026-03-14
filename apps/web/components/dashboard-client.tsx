@@ -392,6 +392,23 @@ export function DashboardClient() {
   const [modalPassword, setModalPassword] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // --- Input modal (replaces browser prompt/confirm) ---
+  const [inputModal, setInputModal] = useState<{
+    title: string;
+    fields: Array<{ key: string; label: string; placeholder?: string; type?: string }>;
+    onSubmit: (values: Record<string, string>) => void;
+  } | null>(null);
+  const [inputModalValues, setInputModalValues] = useState<Record<string, string>>({});
+
+  function showInputModal(
+    title: string,
+    fields: Array<{ key: string; label: string; placeholder?: string; type?: string }>,
+    onSubmit: (values: Record<string, string>) => void,
+  ) {
+    setInputModalValues(Object.fromEntries(fields.map((f) => [f.key, ""])));
+    setInputModal({ title, fields, onSubmit });
+  }
+
   // --- Revision viewing ---
   const [viewingRevisionId, setViewingRevisionId] = useState<string | null>(null);
   const [viewingRevisionEntries, setViewingRevisionEntries] = useState<EnvEntry[] | null>(null);
@@ -1260,8 +1277,9 @@ export function DashboardClient() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="flex items-center gap-2"><IconFile size={16} /> File Schemas</h3>
                 <button className="button sm" onClick={() => {
-                  const fp = prompt("File path (e.g. .env, .env.local):");
-                  if (fp) setSchemaEditing({ filePath: fp.trim(), fields: [] });
+                  showInputModal("New File Schema", [{ key: "filePath", label: "File path", placeholder: ".env, .env.local, etc." }], (vals) => {
+                    if (vals.filePath?.trim()) setSchemaEditing({ filePath: vals.filePath.trim(), fields: [] });
+                  });
                 }}>
                   <IconPlus size={12} /> New schema
                 </button>
@@ -1287,9 +1305,12 @@ export function DashboardClient() {
                     <div className="flex gap-2">
                       <button className="button sm secondary" onClick={() => setSchemaEditing({ filePath: schema.filePath, fields: [...schema.fields] })}>Edit</button>
                       <button className="button sm destructive" onClick={() => {
-                        if (confirm(`Delete schema for ${schema.filePath}?`)) {
-                          void deleteJson(`/api/schemas/${schema.id}`).then(() => refreshSchemas());
-                        }
+                        setConfirmAction({
+                          title: "Delete schema",
+                          message: `Delete the schema for "${schema.filePath}"? This won't delete any environment values, but schema validation will be removed.`,
+                          destructive: true,
+                          onConfirm: () => { setConfirmAction(null); void deleteJson(`/api/schemas/${schema.id}`).then(() => refreshSchemas()); },
+                        });
                       }}>Delete</button>
                     </div>
                   </div>
@@ -1471,9 +1492,12 @@ export function DashboardClient() {
                             });
                           }}>Test</button>
                           <button className="button sm destructive" onClick={() => {
-                            if (confirm("Remove this integration?")) {
-                              void deleteJson(`/api/integrations/${integ.id}`).then(() => { refreshIntegrations(); pushToast("Removed.", "success"); });
-                            }
+                            setConfirmAction({
+                              title: "Remove integration",
+                              message: `Remove the ${integ.provider} integration "${integ.label || integ.provider}"? This won't delete any synced data.`,
+                              destructive: true,
+                              onConfirm: () => { setConfirmAction(null); void deleteJson(`/api/integrations/${integ.id}`).then(() => { refreshIntegrations(); pushToast("Removed.", "success"); }); },
+                            });
                           }}>Remove</button>
                         </div>
                       </div>
@@ -1497,34 +1521,37 @@ export function DashboardClient() {
                           : "Sync with a Vercel project. Requires an access token."}
                       </p>
                       <button className="button sm mt-2" onClick={() => {
-                        const credential = prompt(`${provider === "convex" ? "Deploy key" : "Access token"}:`);
-                        if (!credential) return;
-                        const extra = provider === "convex"
-                          ? prompt("Deployment URL (e.g. https://happy-otter-123.convex.cloud):")
-                          : prompt("Vercel project ID or name:");
-                        if (!extra) return;
-                        const label = prompt("Label (optional):") || `${provider} integration`;
-
-                        startTransition(async () => {
-                          try {
-                            await postJson("/api/integrations", {
-                              projectId: selectedProjectId,
-                              provider,
-                              label,
-                              config: {
-                                wrappedCredential: credential,
-                                ...(provider === "convex" ? { deploymentUrl: extra } : { vercelProjectId: extra }),
-                              },
-                              environmentMappings: selectedEnvironmentId ? [{
-                                providerTarget: provider === "convex" ? "*" : "production",
-                                environmentId: selectedEnvironmentId,
-                                filePath: ".env",
-                              }] : [],
+                        showInputModal(
+                          `Connect ${provider}`,
+                          [
+                            { key: "credential", label: provider === "convex" ? "Deploy key" : "Access token", placeholder: provider === "convex" ? "prod:deploy_key_..." : "vercel_..." , type: "password" },
+                            { key: "extra", label: provider === "convex" ? "Deployment URL" : "Project ID or name", placeholder: provider === "convex" ? "https://happy-otter-123.convex.cloud" : "my-project" },
+                            { key: "label", label: "Label (optional)", placeholder: `${provider} integration` },
+                          ],
+                          (vals) => {
+                            if (!vals.credential || !vals.extra) { pushToast("Credential and URL/ID are required.", "error"); return; }
+                            startTransition(async () => {
+                              try {
+                                await postJson("/api/integrations", {
+                                  projectId: selectedProjectId,
+                                  provider,
+                                  label: vals.label || `${provider} integration`,
+                                  config: {
+                                    wrappedCredential: vals.credential,
+                                    ...(provider === "convex" ? { deploymentUrl: vals.extra } : { vercelProjectId: vals.extra }),
+                                  },
+                                  environmentMappings: selectedEnvironmentId ? [{
+                                    providerTarget: provider === "convex" ? "*" : "production",
+                                    environmentId: selectedEnvironmentId,
+                                    filePath: ".env",
+                                  }] : [],
+                                });
+                                pushToast("Integration added.", "success");
+                                void refreshIntegrations();
+                              } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
                             });
-                            pushToast("Integration added.", "success");
-                            void refreshIntegrations();
-                          } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
-                        });
+                          },
+                        );
                       }}>
                         <IconPlus size={12} /> Connect
                       </button>
@@ -1994,6 +2021,44 @@ export function DashboardClient() {
                   onClick={confirmAction.onConfirm}
                 >
                   {confirmAction.destructive ? "Restore" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INPUT MODAL */}
+      {inputModal && (
+        <div className="modal-overlay" onClick={() => setInputModal(null)}>
+          <div className="modal panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <strong>{inputModal.title}</strong>
+              <button className="icon-button" onClick={() => setInputModal(null)}><IconX size={16} /></button>
+            </div>
+            <div className="modal-body">
+              {inputModal.fields.map((f) => (
+                <div className="field" key={f.key}>
+                  <span>{f.label}</span>
+                  <input
+                    type={f.type || "text"}
+                    value={inputModalValues[f.key] || ""}
+                    onChange={(e) => setInputModalValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    autoFocus={inputModal.fields[0].key === f.key}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        inputModal.onSubmit(inputModalValues);
+                        setInputModal(null);
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2 justify-end mt-2">
+                <button className="button secondary" onClick={() => setInputModal(null)}>Cancel</button>
+                <button className="button" onClick={() => { inputModal.onSubmit(inputModalValues); setInputModal(null); }}>
+                  Confirm
                 </button>
               </div>
             </div>

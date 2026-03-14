@@ -1062,6 +1062,20 @@ async function handlePull() {
         p.log.success(
           `  ${pc.bold(f.file)} ← r${f.remoteRevision.revision}`
         );
+        // Schema validation on pulled content
+        try {
+          const schemaRes = await client.query<{ fields: Array<{ name: string; required: boolean }> } | null>(
+            convexFunctions.getFileSchema,
+            { projectId: local.projectId, filePath: f.file }
+          );
+          if (schemaRes && schemaRes.fields.length > 0) {
+            const pulledKeys = new Set(plaintext.split("\n").map((l: string) => l.match(/^([A-Z_][A-Z0-9_]*)\s*=/i)?.[1]).filter(Boolean));
+            const missing = schemaRes.fields.filter((sf) => sf.required && !pulledKeys.has(sf.name));
+            if (missing.length > 0) {
+              p.log.warn(`    Schema: missing required: ${missing.map((m) => pc.red(m.name)).join(", ")}`);
+            }
+          }
+        } catch { /* schema check failed silently */ }
       } catch {
         spinPull.stop("Decryption failed.");
         p.log.error(
@@ -1455,6 +1469,53 @@ async function handleInitWizard() {
     p.log.info("No .env files found in the project tree.");
   }
 
+  // Auto-generate schemas from discovered .env files
+  if (envFiles.length > 0) {
+    const createSchemas = await p.confirm({
+      message: "Auto-generate file schemas from your .env files?",
+      initialValue: true,
+    });
+    bail(createSchemas);
+
+    if (createSchemas) {
+      for (const file of envFiles) {
+        try {
+          const content = await readFile(resolve(process.cwd(), file), "utf8");
+          const lines = content.split("\n");
+          const fields: Array<{ name: string; type: string; required: boolean; sensitive: boolean }> = [];
+
+          for (const line of lines) {
+            const match = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)/i);
+            if (!match) continue;
+            const [, key, rawValue] = match;
+            const value = rawValue.trim().replace(/^["']|["']$/g, "");
+
+            // Infer type from value
+            let type = "string";
+            if (/^(true|false|yes|no|on|off|0|1)$/i.test(value)) type = "boolean";
+            else if (/^\d+$/.test(value) && Number(value) >= 0 && Number(value) <= 65535) type = "number";
+            else if (/^https?:\/\//.test(value)) type = "url";
+
+            const sensitive = /secret|key|token|password|private|credential/i.test(key);
+
+            fields.push({ name: key, type, required: true, sensitive });
+          }
+
+          if (fields.length > 0) {
+            await client.mutation<string>(convexFunctions.upsertFileSchema, {
+              projectId: project.id,
+              filePath: file,
+              fields,
+            });
+            p.log.success(`  ${pc.bold(file)} → schema with ${fields.length} field${fields.length !== 1 ? "s" : ""}`);
+          }
+        } catch (err) {
+          p.log.warn(`  ${file}: could not generate schema (${err instanceof Error ? err.message : "error"})`);
+        }
+      }
+    }
+  }
+
   // Save local config
   const localConfig: LocalProjectConfig = {
     workspaceId: workspace.id,
@@ -1815,24 +1876,57 @@ async function handleGenerateTypes() {
   else if (existsSync(configPathMts)) configFile = configPathMts;
   else if (existsSync(configPathJs)) configFile = configPathJs;
 
-  if (!configFile) {
-    p.log.error("No tokengate.config.ts found in project root.");
-    p.log.info(`Create one with:\n\n${pc.cyan(`import { defineConfig } from '@tokengate/env'\n\nexport default defineConfig({\n  schema: {\n    DATABASE_URL: { type: 'string', required: true },\n    PORT: { type: 'port', default: 3000 },\n  }\n})`)}`);
-    process.exitCode = 1;
-    return;
-  }
-
   const spinner = p.spinner();
   spinner.start("Loading config");
 
   try {
-    // Dynamic import the config
-    const mod = await import(configFile);
-    const config = mod.default ?? mod;
+    let schema: Record<string, unknown> | null = null;
 
-    if (!config?.schema) {
+    // Try local config file first
+    if (configFile) {
+      const mod = await import(configFile);
+      const config = mod.default ?? mod;
+      schema = config?.schema ?? null;
+    }
+
+    // Fallback: fetch schemas from cloud
+    if (!schema) {
+      const local = loadLocalConfig();
+      if (local?.projectId) {
+        try {
+          const authConfig = await loadConfig();
+          if (authConfig.accessToken && authConfig.convexUrl) {
+            const client = getClient(authConfig);
+            const cloudSchemas = await client.query<Array<{ filePath: string; fields: Array<{ name: string; type: string; required: boolean; sensitive: boolean; defaultValue?: string; description?: string }> }>>(
+              convexFunctions.listFileSchemas,
+              { projectId: local.projectId }
+            );
+            if (cloudSchemas.length > 0) {
+              // Convert cloud schemas to SDK format
+              schema = {};
+              for (const cs of cloudSchemas) {
+                for (const f of cs.fields) {
+                  (schema as Record<string, unknown>)[f.name] = {
+                    type: f.type,
+                    required: f.required,
+                    sensitive: f.sensitive,
+                    ...(f.defaultValue ? { default: f.defaultValue } : {}),
+                    ...(f.description ? { description: f.description } : {}),
+                  };
+                }
+              }
+              p.log.info(`Using ${cloudSchemas.length} cloud schema${cloudSchemas.length !== 1 ? "s" : ""} (no local config found).`);
+            }
+          }
+        } catch {
+          // Cloud fetch failed — continue
+        }
+      }
+    }
+
+    if (!schema || Object.keys(schema).length === 0) {
       spinner.stop("Error");
-      p.log.error("Config file does not export a schema.");
+      p.log.error("No schema found. Create a tokengate.config.ts or define schemas in the dashboard.");
       process.exitCode = 1;
       return;
     }
@@ -1840,18 +1934,18 @@ async function handleGenerateTypes() {
     const { generateTypes, generateExample } = await import("@tokengate/env/typegen");
 
     // Generate .d.ts
-    const dts = generateTypes(config.schema);
+    const dts = generateTypes(schema as Parameters<typeof generateTypes>[0]);
     const dtsPath = resolve(process.cwd(), "env.d.ts");
     await writeFile(dtsPath, dts);
 
     // Generate .env.example
-    const example = generateExample(config.schema);
+    const example = generateExample(schema as Parameters<typeof generateExample>[0]);
     const examplePath = resolve(process.cwd(), ".env.example");
     await writeFile(examplePath, example);
 
     spinner.stop("Generated.");
 
-    const keys = Object.keys(config.schema);
+    const keys = Object.keys(schema);
     p.log.success(`${pc.bold("env.d.ts")} — ${keys.length} typed variable${keys.length !== 1 ? "s" : ""}`);
     p.log.success(`${pc.bold(".env.example")} — template with defaults`);
 
