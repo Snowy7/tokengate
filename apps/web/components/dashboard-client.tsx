@@ -362,6 +362,11 @@ export function DashboardClient() {
   const [expandedRevisionEntries, setExpandedRevisionEntries] = useState<EnvEntry[] | null>(null);
   const [loadingRevisionDiff, setLoadingRevisionDiff] = useState(false);
 
+  // --- Editor UI ---
+  const [editorDesign, setEditorDesign] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [maskedValues, setMaskedValues] = useState(true);
+
   // --- Sidebar UI ---
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
@@ -382,6 +387,30 @@ export function DashboardClient() {
   } | null>(null);
 
   const isEnvUnlocked = derivedKey !== null;
+
+  const filteredEntryIndices = searchFilter
+    ? envEntries.reduce<number[]>((acc, e, i) => {
+        if (e.key.toLowerCase().includes(searchFilter.toLowerCase()) ||
+            e.value.toLowerCase().includes(searchFilter.toLowerCase())) acc.push(i);
+        return acc;
+      }, [])
+    : envEntries.map((_, i) => i);
+
+  const maskVal = (v: string) => maskedValues && v ? "\u2022".repeat(Math.min(v.length, 32)) : v;
+
+  // Diff summary for revision history
+  function diffSummary(entries: EnvEntry[] | null): string {
+    if (!entries) return "";
+    const diff = computeEnvDiff(entries, envEntries);
+    const a = diff.filter((d) => d.kind === "added").length;
+    const r = diff.filter((d) => d.kind === "removed").length;
+    const c = diff.filter((d) => d.kind === "changed").length;
+    const parts: string[] = [];
+    if (a) parts.push(`+${a}`);
+    if (c) parts.push(`~${c}`);
+    if (r) parts.push(`-${r}`);
+    return parts.join(" ") || "no changes";
+  }
 
   // --- Toast ---
   const pushToast = useCallback((message: string, variant: Toast["variant"] = "info") => {
@@ -1241,92 +1270,168 @@ export function DashboardClient() {
 
         {/* UNLOCKED — Key-value editor */}
         {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && selectedSecretSet && isEnvUnlocked && (
-          <div className="fade-in" style={{ padding: 24 }}>
-            <div className="env-editor panel">
-              <div className="env-editor-header">
-                <div>
-                  <strong style={{ fontSize: 15 }}>Environment variables</strong>
-                  {latestRevision && <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>r{latestRevision.revision}</span>}
-                </div>
-                <div className="env-actions">
-                  {dirtyFlag && <span className="tag" style={{ fontSize: 12 }}>Unsaved changes</span>}
-                  <button className="button" onClick={handleSaveRevision} disabled={isPending || envEntries.length === 0}>
-                    {isPending ? "Encrypting..." : "Save encrypted"}
-                  </button>
-                </div>
-              </div>
+          <div className="fade-in" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
 
-              {envEntries.length > 0 && (
-                <div className="env-row env-row-header">
-                  <span className="env-key">KEY</span>
-                  <span className="env-value">VALUE</span>
-                  <span className="env-remove" />
-                </div>
-              )}
-
-              {envEntries.map((entry, i) => (
-                <div className="env-row" key={i}>
-                  <input className="env-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
-                  <input className="env-value" value={entry.value} onChange={(e) => updateEntry(i, "value", e.target.value)} placeholder="value" spellCheck={false} />
-                  <button className="env-remove" onClick={() => removeEntry(i)} title="Remove"><IconTrash size={14} /></button>
-                </div>
+            {/* Design switcher — TEMPORARY for evaluation */}
+            <div className="ed-design-switcher">
+              {([1, 2, 3, 4, 5] as const).map((n) => (
+                <button key={n} className={`ed-design-btn${editorDesign === n ? " active" : ""}`} onClick={() => setEditorDesign(n)}>
+                  {["Code Editor", "Split Pane", "Terminal", "Card Grid", "Notebook"][n - 1]}
+                </button>
               ))}
-
-              <button className="env-add" onClick={addEntry}><IconPlus size={14} /> Add variable</button>
             </div>
 
-            {/* Revision history */}
-            {history.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <strong style={{ fontSize: 15, display: "block", marginBottom: 12 }}>Revision history</strong>
-                <div className="revision-list">
+            {/* ============================================================
+                DESIGN 1: CODE EDITOR — .env file feel with line numbers
+                ============================================================ */}
+            {editorDesign === 1 && (
+              <div className="ed1-wrap">
+                {/* Toolbar */}
+                <div className="ed1-toolbar">
+                  <div className="ed1-tabs">
+                    {secretSets.map((ss) => (
+                      <button key={ss.id} className={`ed1-tab${ss.id === selectedSecretSetId ? " active" : ""}`} onClick={() => selectSecretSet(ss.id)}>
+                        <IconFile size={12} />{ss.filePath || ".env"}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input className="ed1-search" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="Filter..." spellCheck={false} />
+                    <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)} title={maskedValues ? "Reveal values" : "Mask values"}>
+                      {maskedValues ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+                    </button>
+                    {dirtyFlag && <span className="tag" style={{ fontSize: 10 }}>unsaved</span>}
+                    <button className="button sm" onClick={handleSaveRevision} disabled={isPending || envEntries.length === 0}>
+                      {isPending ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+                {/* Editor body */}
+                <div className="ed1-body">
+                  {filteredEntryIndices.map((i) => {
+                    const entry = envEntries[i];
+                    return (
+                      <div className="ed1-line" key={i}>
+                        <span className="ed1-linenum">{i + 1}</span>
+                        <input className="ed1-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
+                        <span className="ed1-eq">=</span>
+                        <input className="ed1-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
+                        <button className="ed1-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
+                      </div>
+                    );
+                  })}
+                  <button className="ed1-add" onClick={addEntry}><IconPlus size={12} /> new variable</button>
+                </div>
+                {/* Status bar */}
+                <div className="ed1-status">
+                  <span>{selectedSecretSet.filePath || ".env"}</span>
+                  <span>{envEntries.length} variable{envEntries.length !== 1 ? "s" : ""}</span>
+                  {latestRevision && <span>r{latestRevision.revision}</span>}
+                  <span className="tag encrypted" style={{ fontSize: 9, padding: "1px 5px" }}>E2E</span>
+                </div>
+                {/* History rail */}
+                {history.length > 0 && (
+                  <div className="ed1-history">
+                    <span className="ed1-history-label">History</span>
+                    {history.map((rev) => {
+                      const isCurrent = rev.id === latestRevision?.id;
+                      const isExpanded = expandedRevisionId === rev.id;
+                      return (
+                        <div key={rev.id}>
+                          <button className={`ed1-rev${isCurrent ? " current" : ""}${isExpanded ? " expanded" : ""}`} onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }}>
+                            <strong>r{rev.revision}</strong>
+                            <span className="muted">{formatRelativeTime(rev.createdAt)}</span>
+                            {isCurrent && <span className="tag encrypted" style={{ fontSize: 9 }}>live</span>}
+                            {!isCurrent && <button className="ed1-restore" onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}><IconRestore size={10} /></button>}
+                          </button>
+                          {isExpanded && !loadingRevisionDiff && expandedRevisionEntries && (
+                            <div className="ed1-diff">
+                              <RevisionDiff oldEntries={expandedRevisionEntries} newEntries={envEntries} oldLabel={`r${rev.revision}`} newLabel="current" />
+                            </div>
+                          )}
+                          {isExpanded && loadingRevisionDiff && <div className="ed1-diff"><div className="spinner" /></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================
+                DESIGN 2: SPLIT PANE — Editor left, history right
+                ============================================================ */}
+            {editorDesign === 2 && (
+              <div className="ed2-wrap">
+                <div className="ed2-left">
+                  {/* File tabs */}
+                  <div className="ed2-filetabs">
+                    {secretSets.map((ss) => (
+                      <button key={ss.id} className={`ed2-filetab${ss.id === selectedSecretSetId ? " active" : ""}`} onClick={() => selectSecretSet(ss.id)}>
+                        {ss.filePath || ".env"}
+                      </button>
+                    ))}
+                    <div style={{ flex: 1 }} />
+                    <input className="ed2-search" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="Search..." spellCheck={false} />
+                    <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)} style={{ width: 28, height: 28 }}>
+                      {maskedValues ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                    </button>
+                  </div>
+                  {/* Table */}
+                  <div className="ed2-table">
+                    <div className="ed2-thead">
+                      <span style={{ width: 36 }}>#</span>
+                      <span style={{ flex: 1 }}>Key</span>
+                      <span style={{ flex: 2 }}>Value</span>
+                      <span style={{ width: 32 }} />
+                    </div>
+                    {filteredEntryIndices.map((i) => {
+                      const entry = envEntries[i];
+                      return (
+                        <div className="ed2-row" key={i}>
+                          <span className="ed2-num">{i + 1}</span>
+                          <input className="ed2-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
+                          <input className="ed2-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
+                          <button className="ed2-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
+                        </div>
+                      );
+                    })}
+                    <button className="ed1-add" onClick={addEntry}><IconPlus size={12} /> Add</button>
+                  </div>
+                  {/* Bottom bar */}
+                  <div className="ed2-bar">
+                    {dirtyFlag && <span className="tag" style={{ fontSize: 10 }}>Unsaved</span>}
+                    <span className="muted" style={{ fontSize: 11 }}>{envEntries.length} vars</span>
+                    <div style={{ flex: 1 }} />
+                    <button className="button sm" onClick={handleSaveRevision} disabled={isPending || envEntries.length === 0}>
+                      {isPending ? "Encrypting..." : "Save encrypted"}
+                    </button>
+                  </div>
+                </div>
+                {/* Right: history panel */}
+                <div className="ed2-right">
+                  <div className="ed2-right-header">
+                    <IconClock size={13} /><strong style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>Revisions</strong>
+                  </div>
+                  {history.length === 0 && <p className="muted" style={{ padding: 12, fontSize: 12 }}>No revisions yet</p>}
                   {history.map((rev) => {
                     const isCurrent = rev.id === latestRevision?.id;
                     const isExpanded = expandedRevisionId === rev.id;
                     return (
-                      <div key={rev.id}>
-                        <div
-                          className={`revision-item${isCurrent ? " current" : ""}`}
-                          onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }}
-                          style={!isCurrent ? { cursor: "pointer" } : undefined}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-                            <IconClock size={13} />
-                            <strong>r{rev.revision}</strong>
-                            {isCurrent && <span className="tag encrypted" style={{ fontSize: 11 }}>current</span>}
+                      <div key={rev.id} className={`ed2-rev${isCurrent ? " current" : ""}${isExpanded ? " expanded" : ""}`}>
+                        <div className="ed2-rev-head" onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }}>
+                          <div>
+                            <strong>r{rev.revision}</strong>{isCurrent && <span className="tag encrypted" style={{ fontSize: 9, marginLeft: 4 }}>current</span>}
                           </div>
-                          <div className="muted" style={{ fontSize: 13, flex: 1 }}>
-                            {formatRelativeTime(rev.createdAt)}
-                            <span style={{ margin: "0 6px" }}>-</span>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{rev.contentHash.slice(0, 16)}...</span>
-                          </div>
+                          <span className="muted" style={{ fontSize: 11 }}>{formatRelativeTime(rev.createdAt)}</span>
                           {!isCurrent && (
-                            <button
-                              className="button secondary"
-                              style={{ fontSize: 12, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}
-                              onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}
-                              disabled={isPending}
-                            >
-                              <IconRestore size={12} /> Restore
-                            </button>
+                            <button className="button sm secondary" style={{ padding: "2px 6px", fontSize: 10 }} onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}><IconRestore size={10} /></button>
                           )}
                         </div>
-                        {/* Expanded diff view */}
                         {isExpanded && (
-                          <div style={{ padding: "12px 14px 16px", borderLeft: "2px solid var(--border)", marginLeft: 14, marginBottom: 4 }}>
-                            {loadingRevisionDiff && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                                <div className="loading-spinner" style={{ width: 16, height: 16 }} />
-                                <span className="muted">Decrypting revision...</span>
-                              </div>
-                            )}
-                            {!loadingRevisionDiff && expandedRevisionEntries && (
-                              <RevisionDiff
-                                oldEntries={expandedRevisionEntries}
-                                newEntries={envEntries}
-                                oldLabel={`r${rev.revision}`}
-                                newLabel={isCurrent ? "current" : `r${latestRevision?.revision ?? "?"} (current)`}
-                              />
+                          <div className="ed2-rev-diff">
+                            {loadingRevisionDiff ? <div className="spinner" /> : expandedRevisionEntries && (
+                              <RevisionDiff oldEntries={expandedRevisionEntries} newEntries={envEntries} oldLabel={`r${rev.revision}`} newLabel="current" />
                             )}
                           </div>
                         )}
@@ -1336,6 +1441,222 @@ export function DashboardClient() {
                 </div>
               </div>
             )}
+
+            {/* ============================================================
+                DESIGN 3: TERMINAL — CLI / terminal output aesthetic
+                ============================================================ */}
+            {editorDesign === 3 && (
+              <div className="ed3-wrap">
+                <div className="ed3-chrome">
+                  <div className="ed3-dots"><span /><span /><span /></div>
+                  <span className="ed3-title">{selectedSecretSet.filePath || ".env"} — tokengate</span>
+                  <div style={{ flex: 1 }} />
+                  <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)} style={{ color: "var(--sidebar-accent)" }}>
+                    {maskedValues ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                  </button>
+                  {dirtyFlag && <span style={{ color: "#f1c40f", fontSize: 11, fontFamily: "var(--font-mono)" }}>*modified</span>}
+                  <button className="button sm" onClick={handleSaveRevision} disabled={isPending} style={{ background: "var(--sidebar-accent)", borderColor: "var(--sidebar-accent)", color: "#000" }}>
+                    {isPending ? "..." : "SAVE"}
+                  </button>
+                </div>
+                <div className="ed3-body">
+                  <div className="ed3-prompt">$ cat {selectedSecretSet.filePath || ".env"}</div>
+                  {filteredEntryIndices.map((i) => {
+                    const entry = envEntries[i];
+                    return (
+                      <div className="ed3-line" key={i}>
+                        <input className="ed3-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
+                        <span className="ed3-eq">=</span>
+                        <input className="ed3-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
+                        <button className="ed3-x" onClick={() => removeEntry(i)}>x</button>
+                      </div>
+                    );
+                  })}
+                  <div className="ed3-prompt" style={{ marginTop: 8, cursor: "pointer", opacity: 0.5 }} onClick={addEntry}>$ echo &quot;NEW_VAR=&quot; &gt;&gt; .env</div>
+                  {/* Inline history */}
+                  {history.length > 0 && (
+                    <>
+                      <div className="ed3-sep" />
+                      <div className="ed3-prompt">$ tokengate history --last 10</div>
+                      {history.map((rev) => {
+                        const isCurrent = rev.id === latestRevision?.id;
+                        const isExpanded = expandedRevisionId === rev.id;
+                        return (
+                          <div key={rev.id}>
+                            <div className="ed3-histline" onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }} style={!isCurrent ? { cursor: "pointer" } : undefined}>
+                              <span style={{ color: isCurrent ? "var(--sidebar-accent)" : "#888" }}>r{rev.revision}</span>
+                              <span style={{ color: "#666" }}>{formatRelativeTime(rev.createdAt)}</span>
+                              <span style={{ color: "#444" }}>{rev.contentHash.slice(0, 12)}</span>
+                              {isCurrent && <span style={{ color: "var(--sidebar-accent)" }}>&lt;-- HEAD</span>}
+                              {!isCurrent && <button className="ed3-restorebtn" onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}>restore</button>}
+                            </div>
+                            {isExpanded && (
+                              <div style={{ paddingLeft: 16, paddingBottom: 8 }}>
+                                {loadingRevisionDiff ? <span style={{ color: "#555" }}>decrypting...</span> : expandedRevisionEntries && (
+                                  <RevisionDiff oldEntries={expandedRevisionEntries} newEntries={envEntries} oldLabel={`r${rev.revision}`} newLabel="HEAD" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+                <div className="ed3-statusbar">
+                  <span>{envEntries.length} vars</span>
+                  <span>|</span>
+                  {latestRevision && <span>r{latestRevision.revision}</span>}
+                  <span>|</span>
+                  <span>E2E encrypted</span>
+                  <div style={{ flex: 1 }} />
+                  <input className="ed3-filter" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="/ search" spellCheck={false} />
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================
+                DESIGN 4: CARD GRID — Each variable as a card
+                ============================================================ */}
+            {editorDesign === 4 && (
+              <div className="ed4-wrap">
+                <div className="ed4-toolbar">
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {secretSets.map((ss) => (
+                      <button key={ss.id} className={`ed1-tab${ss.id === selectedSecretSetId ? " active" : ""}`} onClick={() => selectSecretSet(ss.id)}>
+                        {ss.filePath || ".env"}
+                      </button>
+                    ))}
+                  </div>
+                  <input className="ed2-search" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="Filter variables..." spellCheck={false} style={{ maxWidth: 200 }} />
+                  <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)}>{maskedValues ? <IconEye size={14} /> : <IconEyeOff size={14} />}</button>
+                  {dirtyFlag && <span className="tag" style={{ fontSize: 10 }}>Unsaved</span>}
+                  <button className="button sm" onClick={handleSaveRevision} disabled={isPending}>{isPending ? "Saving..." : "Save"}</button>
+                </div>
+                <div className="ed4-grid">
+                  {filteredEntryIndices.map((i) => {
+                    const entry = envEntries[i];
+                    return (
+                      <div className="ed4-card" key={i}>
+                        <div className="ed4-card-head">
+                          <input className="ed4-card-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
+                          <button className="icon-button" onClick={() => removeEntry(i)} style={{ width: 24, height: 24 }}><IconTrash size={12} /></button>
+                        </div>
+                        <input className="ed4-card-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
+                      </div>
+                    );
+                  })}
+                  <button className="ed4-card ed4-card-add" onClick={addEntry}>
+                    <IconPlus size={20} />
+                    <span>Add variable</span>
+                  </button>
+                </div>
+                {/* History as a bottom drawer */}
+                {history.length > 0 && (
+                  <div className="ed4-history">
+                    <div className="ed4-history-head"><IconClock size={13} /> <strong style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em" }}>Revisions</strong></div>
+                    <div className="ed4-history-items">
+                      {history.map((rev) => {
+                        const isCurrent = rev.id === latestRevision?.id;
+                        return (
+                          <button key={rev.id} className={`ed4-revbtn${isCurrent ? " current" : ""}${expandedRevisionId === rev.id ? " expanded" : ""}`} onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }}>
+                            <strong>r{rev.revision}</strong>
+                            <span className="muted" style={{ fontSize: 10 }}>{formatRelativeTime(rev.createdAt)}</span>
+                            {!isCurrent && <span className="ed4-restore" onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}><IconRestore size={10} /></span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {expandedRevisionId && !loadingRevisionDiff && expandedRevisionEntries && (
+                      <div style={{ padding: "12px 16px", borderTop: "2px solid var(--border)" }}>
+                        <RevisionDiff oldEntries={expandedRevisionEntries} newEntries={envEntries} oldLabel={`r${history.find((r) => r.id === expandedRevisionId)?.revision ?? "?"}`} newLabel="current" />
+                      </div>
+                    )}
+                    {expandedRevisionId && loadingRevisionDiff && <div style={{ padding: 12 }}><div className="spinner" /></div>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================
+                DESIGN 5: NOTEBOOK — Jupyter-style cells with timeline
+                ============================================================ */}
+            {editorDesign === 5 && (
+              <div className="ed5-wrap">
+                <div className="ed5-timeline">
+                  <div className="ed5-tl-label">Timeline</div>
+                  {history.map((rev) => {
+                    const isCurrent = rev.id === latestRevision?.id;
+                    return (
+                      <div key={rev.id} className={`ed5-tl-item${isCurrent ? " current" : ""}${expandedRevisionId === rev.id ? " expanded" : ""}`} onClick={() => { if (!isCurrent) handleToggleRevisionDiff(rev); }}>
+                        <div className="ed5-tl-dot" />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 12 }}>r{rev.revision}{isCurrent ? " (live)" : ""}</div>
+                          <div className="muted" style={{ fontSize: 10 }}>{formatRelativeTime(rev.createdAt)}</div>
+                        </div>
+                        {!isCurrent && <button className="ed5-restore" onClick={(e) => { e.stopPropagation(); handleRestoreRevision(rev); }}><IconRestore size={10} /></button>}
+                      </div>
+                    );
+                  })}
+                  {history.length === 0 && <div className="muted" style={{ fontSize: 11, padding: "8px 12px" }}>No history</div>}
+                </div>
+                <div className="ed5-main">
+                  {/* Toolbar */}
+                  <div className="ed5-toolbar">
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {secretSets.map((ss) => (
+                        <button key={ss.id} className={`ed1-tab${ss.id === selectedSecretSetId ? " active" : ""}`} onClick={() => selectSecretSet(ss.id)}>
+                          {ss.filePath || ".env"}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ flex: 1 }} />
+                    <input className="ed1-search" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="Filter..." spellCheck={false} />
+                    <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)}>{maskedValues ? <IconEye size={14} /> : <IconEyeOff size={14} />}</button>
+                    {dirtyFlag && <span className="tag" style={{ fontSize: 10 }}>unsaved</span>}
+                    <button className="button sm" onClick={handleSaveRevision} disabled={isPending}>{isPending ? "..." : "Save"}</button>
+                  </div>
+                  {/* Diff viewer if expanded */}
+                  {expandedRevisionId && (
+                    <div className="ed5-diffpanel">
+                      {loadingRevisionDiff ? <div className="spinner" /> : expandedRevisionEntries && (
+                        <>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700 }}>Diff: r{history.find((r) => r.id === expandedRevisionId)?.revision} vs current</span>
+                            <button className="icon-button" onClick={() => { setExpandedRevisionId(null); setExpandedRevisionEntries(null); }}><IconX size={14} /></button>
+                          </div>
+                          <RevisionDiff oldEntries={expandedRevisionEntries} newEntries={envEntries} oldLabel={`r${history.find((r) => r.id === expandedRevisionId)?.revision ?? "?"}`} newLabel="current" />
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {/* Variable cells */}
+                  <div className="ed5-cells">
+                    {filteredEntryIndices.map((i) => {
+                      const entry = envEntries[i];
+                      return (
+                        <div className="ed5-cell" key={i}>
+                          <div className="ed5-cell-num">{i + 1}</div>
+                          <div className="ed5-cell-body">
+                            <input className="ed5-cell-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
+                            <input className="ed5-cell-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
+                          </div>
+                          <button className="ed5-cell-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
+                        </div>
+                      );
+                    })}
+                    <button className="ed5-cell ed5-cell-add" onClick={addEntry}><IconPlus size={14} /> Add variable</button>
+                  </div>
+                  {/* Status */}
+                  <div className="ed1-status">
+                    <span>{envEntries.length} vars</span>
+                    {latestRevision && <span>r{latestRevision.revision}</span>}
+                    <span className="tag encrypted" style={{ fontSize: 9, padding: "1px 5px" }}>E2E</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
       </main>
