@@ -643,6 +643,37 @@ async function handlePush() {
   // Push each group
   for (const [envId, files] of byEnv) {
     const envName = files[0].mapping!.environmentName;
+
+    // Schema validation per file (if schema exists)
+    for (const f of files) {
+      try {
+        const schemaRes = await client.query<{ _id: string; fields: Array<{ name: string; type: string; required: boolean }> } | null>(
+          convexFunctions.getFileSchema,
+          { projectId: local.projectId, filePath: f.file }
+        );
+        if (schemaRes && schemaRes.fields.length > 0) {
+          const content = await readFile(resolve(process.cwd(), f.file), "utf8");
+          const lines = content.split("\n");
+          const keys = new Set<string>();
+          for (const line of lines) {
+            const match = line.match(/^([A-Z_][A-Z0-9_]*)\s*=/i);
+            if (match) keys.add(match[1]);
+          }
+          const missing = schemaRes.fields.filter((sf) => sf.required && !keys.has(sf.name));
+          const extra = [...keys].filter((k) => !schemaRes.fields.some((sf) => sf.name === k));
+
+          if (missing.length > 0) {
+            p.log.warn(`${pc.bold(f.file)}: missing required variables: ${missing.map((m) => pc.red(m.name)).join(", ")}`);
+          }
+          if (extra.length > 0) {
+            p.log.warn(`${pc.bold(f.file)}: variables not in schema: ${extra.map((e) => pc.yellow(e)).join(", ")}`);
+          }
+        }
+      } catch {
+        // Schema fetch failed — skip validation silently
+      }
+    }
+
     const label =
       byEnv.size > 1
         ? `Password for ${pc.cyan(envName)}`

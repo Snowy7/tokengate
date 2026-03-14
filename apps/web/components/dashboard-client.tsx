@@ -18,7 +18,10 @@ import {
 } from "@tokengate/env-format";
 import type { EnvEntry } from "@tokengate/env-format";
 import type {
+  FileSchema,
+  Integration,
   Invite,
+  SchemaField,
   SecretRevision,
   SecretSet,
 } from "@tokengate/sdk";
@@ -405,6 +408,14 @@ export function DashboardClient() {
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("secrets");
 
+  // --- Schemas & Integrations ---
+  const [fileSchemas, setFileSchemas] = useState<FileSchema[]>([]);
+  const [projectIntegrations, setProjectIntegrations] = useState<Integration[]>([]);
+  const [loadingSchemas, setLoadingSchemas] = useState(false);
+  const [schemaEditing, setSchemaEditing] = useState<{ filePath: string; fields: SchemaField[] } | null>(null);
+  const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState("string");
+
   // --- Settings UI ---
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
@@ -482,6 +493,38 @@ export function DashboardClient() {
       void refreshMembers();
     }
   }, [activeView, selectedWorkspaceId, refreshMembers]);
+
+  // --- Load schemas + integrations when those views open ---
+  const refreshSchemas = useCallback(async () => {
+    if (!selectedProjectId) return;
+    setLoadingSchemas(true);
+    try {
+      const res = await fetchJson<{ schemas: FileSchema[] }>(`/api/schemas?projectId=${selectedProjectId}`);
+      setFileSchemas(res.schemas);
+    } catch { /* ignore */ } finally { setLoadingSchemas(false); }
+  }, [selectedProjectId]);
+
+  const refreshIntegrations = useCallback(async () => {
+    if (!selectedProjectId) return;
+    try {
+      const res = await fetchJson<{ integrations: Integration[] }>(`/api/integrations?projectId=${selectedProjectId}`);
+      setProjectIntegrations(res.integrations);
+    } catch { /* ignore */ }
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if ((activeView === "schemas" || activeView === "secrets") && selectedProjectId) {
+      void refreshSchemas();
+    }
+    if (activeView === "integrations" && selectedProjectId) {
+      void refreshIntegrations();
+    }
+  }, [activeView, selectedProjectId, refreshSchemas, refreshIntegrations]);
+
+  // Get schema for currently selected file
+  const currentFileSchema = selectedSecretSet
+    ? fileSchemas.find((s) => s.filePath === (selectedSecretSet.filePath || ".env")) ?? null
+    : null;
 
   // --- Reset crypto when environment changes ---
   useEffect(() => {
@@ -1216,36 +1259,165 @@ export function DashboardClient() {
             <div className="panel p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="flex items-center gap-2"><IconFile size={16} /> File Schemas</h3>
+                <button className="button sm" onClick={() => {
+                  const fp = prompt("File path (e.g. .env, .env.local):");
+                  if (fp) setSchemaEditing({ filePath: fp.trim(), fields: [] });
+                }}>
+                  <IconPlus size={12} /> New schema
+                </button>
               </div>
               <p className="muted text-sm mb-4">
-                Define the variables each file should contain. Schemas are shared across all environments — every environment will have the same keys, with different values.
+                Define the variables each file should contain. Schemas are shared across all environments.
               </p>
 
-              {/* Schema list - loaded via API */}
-              <div className="members-list">
-                <div className="member-row flex items-center gap-3 py-3">
-                  <span className="muted text-xs">Schemas are managed per file path at the project level. Use the API or CLI to create schemas.</span>
-                </div>
-                <div className="member-row">
-                  <div className="flex-1 min-w-0">
-                    <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>POST /api/schemas</code>
-                  </div>
-                  <span className="muted text-xs">Create/update a schema</span>
-                </div>
-                <div className="member-row">
-                  <div className="flex-1 min-w-0">
-                    <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>tokengate generate-types</code>
-                  </div>
-                  <span className="muted text-xs">Generate TypeScript types from config</span>
-                </div>
-              </div>
+              {loadingSchemas && <div className="flex items-center gap-2 p-3"><div className="spinner" /><span className="muted text-xs">Loading...</span></div>}
 
-              <div className="docs-info mt-4" style={{ border: "3px solid var(--accent)", background: "var(--accent-subtle)" }}>
-                <p className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>
-                  Create a <strong>tokengate.config.ts</strong> in your project root to define schemas.
-                  Run <strong>tokengate generate-types</strong> to generate TypeScript types and .env.example.
-                </p>
-              </div>
+              {!loadingSchemas && fileSchemas.length === 0 && !schemaEditing && (
+                <p className="muted text-sm">No schemas defined yet. Create one to enforce variable structure across environments.</p>
+              )}
+
+              {/* Existing schemas */}
+              {fileSchemas.map((schema) => (
+                <div key={schema.id} className="panel p-4 mb-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <span className="font-bold text-sm" style={{ fontFamily: "var(--font-mono)" }}>{schema.filePath}</span>
+                      <span className="muted text-xs ml-2">v{schema.version} &middot; {schema.fields.length} field{schema.fields.length !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="button sm secondary" onClick={() => setSchemaEditing({ filePath: schema.filePath, fields: [...schema.fields] })}>Edit</button>
+                      <button className="button sm destructive" onClick={() => {
+                        if (confirm(`Delete schema for ${schema.filePath}?`)) {
+                          void deleteJson(`/api/schemas/${schema.id}`).then(() => refreshSchemas());
+                        }
+                      }}>Delete</button>
+                    </div>
+                  </div>
+                  <div className="env-editor">
+                    <div className="ed1-line font-bold text-[10px] uppercase tracking-wider" style={{ fontFamily: "var(--font-mono)", background: "var(--surface-hover)", color: "var(--muted)" }}>
+                      <span className="flex-1 px-2 py-1">Name</span>
+                      <span className="w-20 px-2 py-1">Type</span>
+                      <span className="w-12 px-2 py-1 text-center">Req</span>
+                      <span className="w-12 px-2 py-1 text-center">Sens</span>
+                      <span className="flex-1 px-2 py-1">Default</span>
+                    </div>
+                    {schema.fields.map((f, i) => (
+                      <div key={i} className="ed1-line text-xs">
+                        <span className="flex-1 px-2 py-1 font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--accent-strong)" }}>{f.name}</span>
+                        <span className="w-20 px-2 py-1 muted">{f.type}</span>
+                        <span className="w-12 px-2 py-1 text-center">{f.required ? "yes" : ""}</span>
+                        <span className="w-12 px-2 py-1 text-center">{f.sensitive ? "yes" : ""}</span>
+                        <span className="flex-1 px-2 py-1 muted">{f.defaultValue || ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Schema editor */}
+              {schemaEditing && (
+                <div className="panel p-4 mt-3" style={{ border: "3px solid var(--accent)" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-bold text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+                      {schemaEditing.filePath}
+                    </span>
+                    <div className="flex gap-2">
+                      <button className="button sm" disabled={isPending} onClick={() => {
+                        startTransition(async () => {
+                          try {
+                            await postJson("/api/schemas", {
+                              projectId: selectedProjectId,
+                              filePath: schemaEditing.filePath,
+                              fields: schemaEditing.fields,
+                            });
+                            pushToast("Schema saved.", "success");
+                            setSchemaEditing(null);
+                            void refreshSchemas();
+                          } catch (err) {
+                            pushToast(err instanceof Error ? err.message : "Failed.", "error");
+                          }
+                        });
+                      }}>
+                        {isPending ? "Saving..." : "Save"}
+                      </button>
+                      <button className="button sm secondary" onClick={() => setSchemaEditing(null)}>Cancel</button>
+                    </div>
+                  </div>
+
+                  {schemaEditing.fields.map((f, i) => (
+                    <div key={i} className="ed1-line text-xs flex items-center">
+                      <input className="ed1-key flex-1" value={f.name} onChange={(e) => {
+                        const updated = [...schemaEditing.fields];
+                        updated[i] = { ...f, name: e.target.value };
+                        setSchemaEditing({ ...schemaEditing, fields: updated });
+                      }} placeholder="VARIABLE_NAME" spellCheck={false} />
+                      <select className="select w-24 text-xs py-1 px-2 border-0" value={f.type} onChange={(e) => {
+                        const updated = [...schemaEditing.fields];
+                        updated[i] = { ...f, type: e.target.value };
+                        setSchemaEditing({ ...schemaEditing, fields: updated });
+                      }}>
+                        <option value="string">string</option>
+                        <option value="number">number</option>
+                        <option value="boolean">boolean</option>
+                        <option value="url">url</option>
+                        <option value="enum">enum</option>
+                      </select>
+                      <label className="flex items-center gap-1 px-2 text-[10px] muted cursor-pointer">
+                        <input type="checkbox" checked={f.required} onChange={(e) => {
+                          const updated = [...schemaEditing.fields];
+                          updated[i] = { ...f, required: e.target.checked };
+                          setSchemaEditing({ ...schemaEditing, fields: updated });
+                        }} /> req
+                      </label>
+                      <label className="flex items-center gap-1 px-2 text-[10px] muted cursor-pointer">
+                        <input type="checkbox" checked={f.sensitive} onChange={(e) => {
+                          const updated = [...schemaEditing.fields];
+                          updated[i] = { ...f, sensitive: e.target.checked };
+                          setSchemaEditing({ ...schemaEditing, fields: updated });
+                        }} /> sens
+                      </label>
+                      <input className="ed1-val w-28" value={f.defaultValue || ""} onChange={(e) => {
+                        const updated = [...schemaEditing.fields];
+                        updated[i] = { ...f, defaultValue: e.target.value || undefined };
+                        setSchemaEditing({ ...schemaEditing, fields: updated });
+                      }} placeholder="default" spellCheck={false} />
+                      <button className="ed1-del opacity-100" onClick={() => {
+                        const updated = schemaEditing.fields.filter((_, j) => j !== i);
+                        setSchemaEditing({ ...schemaEditing, fields: updated });
+                      }}><IconTrash size={12} /></button>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center gap-2 mt-2">
+                    <input className="ed1-search flex-1" value={newFieldName} onChange={(e) => setNewFieldName(e.target.value.toUpperCase())} placeholder="NEW_VARIABLE" spellCheck={false}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newFieldName.trim()) {
+                          setSchemaEditing({
+                            ...schemaEditing,
+                            fields: [...schemaEditing.fields, { name: newFieldName.trim(), type: newFieldType, required: true, sensitive: false }],
+                          });
+                          setNewFieldName("");
+                        }
+                      }}
+                    />
+                    <select className="select w-24 text-xs py-1 px-2" value={newFieldType} onChange={(e) => setNewFieldType(e.target.value)}>
+                      <option value="string">string</option>
+                      <option value="number">number</option>
+                      <option value="boolean">boolean</option>
+                      <option value="url">url</option>
+                      <option value="enum">enum</option>
+                    </select>
+                    <button className="button sm" onClick={() => {
+                      if (!newFieldName.trim()) return;
+                      setSchemaEditing({
+                        ...schemaEditing,
+                        fields: [...schemaEditing.fields, { name: newFieldName.trim(), type: newFieldType, required: true, sensitive: false }],
+                      });
+                      setNewFieldName("");
+                    }}><IconPlus size={12} /> Add</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1258,46 +1430,107 @@ export function DashboardClient() {
                 <h3 className="flex items-center gap-2"><IconLayers size={16} /> Integrations</h3>
               </div>
               <p className="muted text-sm mb-4">
-                Connect external services to sync environment variables. Credentials are encrypted with your workspace key.
+                Connect external services to sync environment variables.
               </p>
 
+              {/* Connected integrations */}
+              {projectIntegrations.length > 0 && (
+                <div className="flex flex-col gap-3 mb-4">
+                  {projectIntegrations.map((integ) => (
+                    <div key={integ.id} className="panel p-4 flex items-start gap-4">
+                      <div className="w-10 h-10 flex items-center justify-center border-3 border-[var(--border)] bg-[var(--surface-hover)]">
+                        {integ.provider === "convex" ? <IconConvex size={20} /> : <IconVercel size={16} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm">{integ.label || integ.provider}</span>
+                          <span className="tag text-[9px]">{integ.provider}</span>
+                          {integ.lastSyncStatus && (
+                            <span className={`tag text-[9px] ${integ.lastSyncStatus === "success" ? "encrypted" : "error"}`}>
+                              {integ.lastSyncStatus}
+                            </span>
+                          )}
+                        </div>
+                        {integ.lastSyncAt && <span className="muted text-[10px]">Last synced: {new Date(integ.lastSyncAt).toLocaleString()}</span>}
+                        <div className="flex gap-2 mt-2">
+                          <button className="button sm" disabled={isPending} onClick={() => {
+                            startTransition(async () => {
+                              try {
+                                await postJson(`/api/integrations/${integ.id}/sync`, { direction: "pull" });
+                                pushToast("Synced from provider.", "success");
+                                void refreshIntegrations();
+                              } catch (err) { pushToast(err instanceof Error ? err.message : "Sync failed.", "error"); }
+                            });
+                          }}>Pull</button>
+                          <button className="button sm secondary" disabled={isPending} onClick={() => {
+                            startTransition(async () => {
+                              try {
+                                await postJson(`/api/integrations/${integ.id}/test`, {});
+                                pushToast("Connection OK.", "success");
+                              } catch (err) { pushToast(err instanceof Error ? err.message : "Test failed.", "error"); }
+                            });
+                          }}>Test</button>
+                          <button className="button sm destructive" onClick={() => {
+                            if (confirm("Remove this integration?")) {
+                              void deleteJson(`/api/integrations/${integ.id}`).then(() => { refreshIntegrations(); pushToast("Removed.", "success"); });
+                            }
+                          }}>Remove</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add integration cards */}
               <div className="flex flex-col gap-3">
-                {/* Convex */}
-                <div className="panel p-4 flex items-start gap-4">
-                  <div className="w-10 h-10 flex items-center justify-center border-3 border-[var(--border)] bg-[var(--surface-hover)]">
-                    <IconConvex size={20} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm">Convex</div>
-                    <p className="muted text-xs mt-1">Sync environment variables with your Convex deployment. Provide your deploy key and deployment URL.</p>
-                    <div className="mt-2">
-                      <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>POST /api/integrations</code>
-                      <span className="muted text-xs ml-2">provider: "convex"</span>
+                {(["convex", "vercel"] as const).map((provider) => (
+                  <div key={provider} className="panel p-4 flex items-start gap-4">
+                    <div className="w-10 h-10 flex items-center justify-center border-3 border-[var(--border)] bg-[var(--surface-hover)]">
+                      {provider === "convex" ? <IconConvex size={20} /> : <IconVercel size={16} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm capitalize">{provider}</div>
+                      <p className="muted text-xs mt-1">
+                        {provider === "convex"
+                          ? "Sync with a Convex deployment. Requires a deploy key."
+                          : "Sync with a Vercel project. Requires an access token."}
+                      </p>
+                      <button className="button sm mt-2" onClick={() => {
+                        const credential = prompt(`${provider === "convex" ? "Deploy key" : "Access token"}:`);
+                        if (!credential) return;
+                        const extra = provider === "convex"
+                          ? prompt("Deployment URL (e.g. https://happy-otter-123.convex.cloud):")
+                          : prompt("Vercel project ID or name:");
+                        if (!extra) return;
+                        const label = prompt("Label (optional):") || `${provider} integration`;
+
+                        startTransition(async () => {
+                          try {
+                            await postJson("/api/integrations", {
+                              projectId: selectedProjectId,
+                              provider,
+                              label,
+                              config: {
+                                wrappedCredential: credential,
+                                ...(provider === "convex" ? { deploymentUrl: extra } : { vercelProjectId: extra }),
+                              },
+                              environmentMappings: selectedEnvironmentId ? [{
+                                providerTarget: provider === "convex" ? "*" : "production",
+                                environmentId: selectedEnvironmentId,
+                                filePath: ".env",
+                              }] : [],
+                            });
+                            pushToast("Integration added.", "success");
+                            void refreshIntegrations();
+                          } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
+                        });
+                      }}>
+                        <IconPlus size={12} /> Connect
+                      </button>
                     </div>
                   </div>
-                </div>
-
-                {/* Vercel */}
-                <div className="panel p-4 flex items-start gap-4">
-                  <div className="w-10 h-10 flex items-center justify-center border-3 border-[var(--border)] bg-[var(--surface-hover)]">
-                    <IconVercel size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm">Vercel</div>
-                    <p className="muted text-xs mt-1">Sync environment variables with your Vercel project. Supports production, preview, and development targets.</p>
-                    <div className="mt-2">
-                      <code className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>POST /api/integrations</code>
-                      <span className="muted text-xs ml-2">provider: "vercel"</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="docs-info mt-4" style={{ border: "3px solid var(--accent)", background: "var(--accent-subtle)" }}>
-                <p className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>
-                  Integrations are managed via the API. Use <strong>tokengate sync --provider convex</strong> from the CLI,
-                  or call the <strong>/api/integrations</strong> endpoints.
-                </p>
+                ))}
               </div>
             </div>
           </div>
@@ -1428,6 +1661,7 @@ export function DashboardClient() {
                     <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)} title={maskedValues ? "Reveal values" : "Mask values"}>
                       {maskedValues ? <IconEye size={14} /> : <IconEyeOff size={14} />}
                     </button>
+                    {currentFileSchema && <span className="tag encrypted text-[9px]">schema v{currentFileSchema.version}</span>}
                     {dirtyFlag && <span className="tag text-[10px]">unsaved</span>}
                     <button className="button sm" onClick={handleSaveRevision} disabled={isPending || envEntries.length === 0}>
                       {isPending ? "Saving..." : "Save"}
@@ -1460,22 +1694,96 @@ export function DashboardClient() {
                   </div>
                 )}
 
-                {/* Editor body — normal mode */}
+                {/* Editor body — normal mode (schema-aware) */}
                 {!isViewingRevision && (
                   <div className="ed1-body">
-                    {filteredEntryIndices.map((i) => {
-                      const entry = envEntries[i];
-                      return (
-                        <div className="ed1-line" key={i}>
-                          <span className="ed1-linenum">{i + 1}</span>
-                          <input className="ed1-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
-                          <span className="ed1-eq">=</span>
-                          <input className="ed1-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
-                          <button className="ed1-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
-                        </div>
-                      );
-                    })}
-                    <button className="ed1-add" onClick={addEntry}><IconPlus size={12} /> new variable</button>
+                    {currentFileSchema ? (
+                      <>
+                        {/* Schema-constrained: render schema fields first */}
+                        {currentFileSchema.fields.map((field, i) => {
+                          const entryIdx = envEntries.findIndex((e) => e.key === field.name);
+                          const entry = entryIdx >= 0 ? envEntries[entryIdx] : null;
+                          const isMissing = !entry && field.required;
+                          const value = entry?.value ?? "";
+
+                          // Skip if search filter doesn't match
+                          if (searchFilter && !field.name.toLowerCase().includes(searchFilter.toLowerCase()) && !value.toLowerCase().includes(searchFilter.toLowerCase())) return null;
+
+                          return (
+                            <div className={`ed1-line${isMissing ? " ed-diff-removed" : ""}`} key={field.name}>
+                              <span className="ed1-linenum">{i + 1}</span>
+                              <span className="ed1-key" title={field.description}>{field.name}</span>
+                              <span className="ed1-eq">=</span>
+                              <input
+                                className="ed1-val"
+                                value={maskedValues && field.sensitive ? maskVal(value) : value}
+                                onChange={(e) => {
+                                  if (maskedValues && field.sensitive) { setMaskedValues(false); return; }
+                                  if (entryIdx >= 0) {
+                                    updateEntry(entryIdx, "value", e.target.value);
+                                  } else {
+                                    // Add the entry
+                                    setEnvEntries((prev) => [...prev, { key: field.name, value: e.target.value }]);
+                                    setDirtyFlag(true);
+                                  }
+                                }}
+                                onFocus={() => { if (maskedValues && field.sensitive) setMaskedValues(false); }}
+                                placeholder={field.defaultValue || `(${field.type}${field.required ? ", required" : ""})`}
+                                spellCheck={false}
+                              />
+                              <span className="text-[9px] px-1 muted" style={{ fontFamily: "var(--font-mono)" }}>{field.type}</span>
+                            </div>
+                          );
+                        })}
+
+                        {/* Extra keys not in schema — show warning + "Add to schema" */}
+                        {envEntries.filter((e) => e.key && !currentFileSchema.fields.some((f) => f.name === e.key)).map((entry) => {
+                          const i = envEntries.indexOf(entry);
+                          return (
+                            <div className="ed1-line ed-diff-changed" key={entry.key || i}>
+                              <span className="ed1-linenum" title="Not in schema">!</span>
+                              <input className="ed1-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} spellCheck={false} />
+                              <span className="ed1-eq">=</span>
+                              <input className="ed1-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} spellCheck={false} />
+                              <button className="text-[9px] px-2 cursor-pointer border-0 bg-transparent whitespace-nowrap" style={{ fontFamily: "var(--font-mono)", color: "var(--warning)" }}
+                                title="Add this variable to the schema"
+                                onClick={() => {
+                                  startTransition(async () => {
+                                    try {
+                                      await postJson("/api/schemas", {
+                                        projectId: selectedProjectId,
+                                        filePath: selectedSecretSet?.filePath || ".env",
+                                        fields: [...currentFileSchema.fields, { name: entry.key, type: "string", required: false, sensitive: false }],
+                                      });
+                                      pushToast(`Added "${entry.key}" to schema.`, "success");
+                                      void refreshSchemas();
+                                    } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
+                                  });
+                                }}
+                              >+schema</button>
+                              <button className="ed1-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <>
+                        {/* Free-form mode (no schema) */}
+                        {filteredEntryIndices.map((i) => {
+                          const entry = envEntries[i];
+                          return (
+                            <div className="ed1-line" key={i}>
+                              <span className="ed1-linenum">{i + 1}</span>
+                              <input className="ed1-key" value={entry.key} onChange={(e) => updateEntry(i, "key", e.target.value)} placeholder="KEY" spellCheck={false} />
+                              <span className="ed1-eq">=</span>
+                              <input className="ed1-val" value={maskedValues ? maskVal(entry.value) : entry.value} onChange={(e) => { if (!maskedValues) updateEntry(i, "value", e.target.value); }} onFocus={() => { if (maskedValues) setMaskedValues(false); }} placeholder="value" spellCheck={false} />
+                              <button className="ed1-del" onClick={() => removeEntry(i)}><IconTrash size={12} /></button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    <button className="ed1-add" onClick={addEntry}><IconPlus size={12} /> {currentFileSchema ? "add extra variable" : "new variable"}</button>
                   </div>
                 )}
 
