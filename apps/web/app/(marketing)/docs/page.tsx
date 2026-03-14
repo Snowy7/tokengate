@@ -80,22 +80,21 @@ function Bold({ children }: { children: React.ReactNode }) {
 
 export default function DocsPage() {
   const [dark, setDark] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [activeSection, setActiveSection] = useState("getting-started");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("tg-theme");
-    if (stored) {
-      setDark(stored === "dark");
-    } else {
-      setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
-    }
+    const theme = document.documentElement.getAttribute("data-theme");
+    setDark(theme !== "light");
+    setMounted(true);
   }, []);
 
   const toggleTheme = () => {
     const next = !dark;
     setDark(next);
     localStorage.setItem("tg-theme", next ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
   };
 
   const handleScroll = useCallback(() => {
@@ -116,7 +115,7 @@ export default function DocsPage() {
   }, [handleScroll]);
 
   return (
-    <div className="docs-root" data-theme={dark ? "dark" : "light"}>
+    <div className="docs-root">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -131,7 +130,7 @@ export default function DocsPage() {
   --docs-text-secondary: #5a5a5a;
   --docs-green: #00a86b;
   --docs-green-dim: rgba(0, 168, 107, 0.10);
-  --docs-border: #00a86b;
+  --docs-border: #2a2a2a;
   --docs-border-light: #ddd8d0;
   --docs-terminal-bg: #1a1f1c;
   --docs-terminal-text: #d4d4d4;
@@ -142,11 +141,11 @@ export default function DocsPage() {
   --docs-terminal-dim: #666666;
   --docs-font-mono: 'Space Mono', monospace;
   --docs-font-sans: 'Work Sans', sans-serif;
-  --docs-shadow: 4px 4px 0 #00a86b;
+  --docs-shadow: 4px 4px 0 #2a2a2a;
   --docs-sidebar-width: 260px;
 }
 
-.docs-root[data-theme="dark"] {
+html[data-theme="dark"] .docs-root {
   --docs-bg: #0f1412;
   --docs-bg-alt: #141a17;
   --docs-surface: #182019;
@@ -862,7 +861,7 @@ html {
             onClick={toggleTheme}
             aria-label="Toggle dark mode"
           >
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
+            {mounted ? (dark ? <Sun size={18} /> : <Moon size={18} />) : <span style={{ width: 18, height: 18 }} />}
           </button>
           <Link href="/" className="docs-nav-link">
             Home

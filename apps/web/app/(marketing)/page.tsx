@@ -26,7 +26,7 @@ const THEME_VARS = `
   --tg-surface: #faf9f6;
   --tg-text: #1a1a1a;
   --tg-text-secondary: #5a5a5a;
-  --tg-border: #00a86b;
+  --tg-border: #2a2a2a;
   --tg-terminal-bg: #1a1f1c;
   --tg-terminal-text: #d4d4d4;
   --tg-terminal-green: #00d68f;
@@ -34,10 +34,10 @@ const THEME_VARS = `
   --tg-terminal-blue: #60a5fa;
   --tg-terminal-red: #f87171;
   --tg-terminal-dim: #666666;
-  --tg-shadow: 4px 4px 0 #00a86b;
-  --tg-hover-shadow: 6px 6px 0 #00a86b;
+  --tg-shadow: 4px 4px 0 #2a2a2a;
+  --tg-hover-shadow: 6px 6px 0 #2a2a2a;
 }
-.tg-root[data-theme="dark"] {
+html[data-theme="dark"] .tg-root {
   --tg-green: #00d68f;
   --tg-green-dim: rgba(0, 214, 143, 0.10);
   --tg-bg: #0f1412;
@@ -214,20 +214,19 @@ function StatusDot({ status }: { status: "synced" | "changed" | "new" }) {
 
 export default function MarketingPage() {
   const [dark, setDark] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("tg-theme");
-    if (stored) {
-      setDark(stored === "dark");
-    } else {
-      setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
-    }
+    const theme = document.documentElement.getAttribute("data-theme");
+    setDark(theme !== "light");
+    setMounted(true);
   }, []);
 
   const toggleTheme = () => {
     const next = !dark;
     setDark(next);
     localStorage.setItem("tg-theme", next ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
   };
 
   const mono = { fontFamily: "'Space Mono', monospace" } as const;
@@ -236,7 +235,6 @@ export default function MarketingPage() {
   return (
     <div
       className="tg-root min-h-screen overflow-x-hidden antialiased"
-      data-theme={dark ? "dark" : "light"}
       style={{ background: "var(--tg-bg)", color: "var(--tg-text)", ...sans }}
     >
       {/* Theme tokens — not inline styles, just CSS custom properties */}
@@ -259,7 +257,7 @@ export default function MarketingPage() {
             onClick={toggleTheme}
             aria-label="Toggle dark mode"
           >
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
+            {mounted ? (dark ? <Sun size={18} /> : <Moon size={18} />) : <span className="w-[18px] h-[18px]" />}
           </button>
           <Link
             href="/docs"
