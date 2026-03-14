@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { UserButton } from "@clerk/nextjs";
 import {
   deriveEnvironmentKey,
@@ -18,15 +18,11 @@ import {
 } from "@tokengate/env-format";
 import type { EnvEntry } from "@tokengate/env-format";
 import type {
-  Environment,
   Invite,
-  InviteWithWorkspace,
-  MemberWithProfile,
-  Project,
   SecretRevision,
   SecretSet,
-  WorkspaceWithMembership,
 } from "@tokengate/sdk";
+import { useSidebarData, type EnvironmentWithMeta } from "./use-sidebar-data";
 
 // ---------------------------------------------------------------------------
 // Icons
@@ -212,19 +208,6 @@ interface Toast {
 
 let toastCounter = 0;
 
-interface EnvFileMeta {
-  secretSetId: string;
-  filePath: string | null;
-  latestRevision: number | null;
-}
-
-interface EnvironmentWithMeta {
-  environment: Environment;
-  fileCount: number;
-  files: EnvFileMeta[];
-  latestRevisionTimestamp: number | null;
-}
-
 type DiffLineKind = "added" | "removed" | "changed" | "unchanged";
 
 interface DiffLine {
@@ -335,24 +318,28 @@ type ActiveView = "secrets" | "settings";
 // ---------------------------------------------------------------------------
 
 export function DashboardClient() {
-  // --- Data ---
-  const [workspaces, setWorkspaces] = useState<WorkspaceWithMembership[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [environmentsMeta, setEnvironmentsMeta] = useState<EnvironmentWithMeta[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
-  const [selectedSecretSetId, setSelectedSecretSetId] = useState("");
-  const [secretSets, setSecretSets] = useState<SecretSet[]>([]);
+  // --- Sidebar data (workspaces, projects, environments, secret sets, members) ---
+  const sidebar = useSidebarData();
+  const {
+    workspaces, projects, environments, environmentsMeta, secretSets,
+    members, pendingInvites,
+    selectedWorkspaceId, selectedProjectId, selectedEnvironmentId, selectedSecretSetId,
+    selectedWorkspace, selectedProject, selectedEnvironment, selectedSecretSet,
+    selectedMembership, isOwner, isAdmin, isOwnerOrAdmin,
+    loading,
+    selectWorkspace, selectProject, selectEnvironment, selectSecretSet,
+    refreshWorkspaces, refreshEnvironments, refreshMembers,
+  } = sidebar;
+
+  // Aliases for loading states
+  const loadingWorkspaces = loading.workspaces;
+  const loadingProjects = loading.projects;
+  const loadingEnvironments = loading.environments;
+  const loadingSecrets = loading.secretSets;
+
+  // --- Content-area state ---
   const [latestRevision, setLatestRevision] = useState<SecretRevision | null>(null);
   const [history, setHistory] = useState<SecretRevision[]>([]);
-
-  // --- Loading states ---
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
-  const [loadingProjects, setLoadingProjects] = useState(false);
-  const [loadingEnvironments, setLoadingEnvironments] = useState(false);
-  const [loadingSecrets, setLoadingSecrets] = useState(false);
 
   // --- Per-environment crypto ---
   const [envPassword, setEnvPassword] = useState("");
@@ -375,18 +362,16 @@ export function DashboardClient() {
   const [expandedRevisionEntries, setExpandedRevisionEntries] = useState<EnvEntry[] | null>(null);
   const [loadingRevisionDiff, setLoadingRevisionDiff] = useState(false);
 
-  // --- Sidebar ---
+  // --- Sidebar UI ---
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("secrets");
 
-  // --- Settings ---
-  const [members, setMembers] = useState<MemberWithProfile[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
+  // --- Settings UI ---
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
-  const [loadingMembers, setLoadingMembers] = useState(false);
   const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+  const loadingMembers = loading.members;
 
   // --- Confirmation dialog ---
   const [confirmAction, setConfirmAction] = useState<{
@@ -396,30 +381,6 @@ export function DashboardClient() {
     onConfirm: () => void;
   } | null>(null);
 
-  // --- Derived ---
-  const selectedWorkspace = useMemo(
-    () => workspaces.find((w) => w.workspace?.id === selectedWorkspaceId)?.workspace ?? null,
-    [selectedWorkspaceId, workspaces],
-  );
-  const selectedProject = useMemo(
-    () => projects.find((p) => p.id === selectedProjectId) ?? null,
-    [selectedProjectId, projects],
-  );
-  const selectedEnvironment = useMemo(
-    () => environments.find((e) => e.id === selectedEnvironmentId) ?? null,
-    [selectedEnvironmentId, environments],
-  );
-  const selectedSecretSet = useMemo(
-    () => secretSets.find((s) => s.id === selectedSecretSetId) ?? null,
-    [selectedSecretSetId, secretSets],
-  );
-  const selectedMembership = useMemo(
-    () => workspaces.find((w) => w.workspace?.id === selectedWorkspaceId)?.membership ?? null,
-    [selectedWorkspaceId, workspaces],
-  );
-  const isOwner = selectedMembership?.role === "owner";
-  const isAdmin = selectedMembership?.role === "admin";
-  const isOwnerOrAdmin = isOwner || isAdmin;
   const isEnvUnlocked = derivedKey !== null;
 
   // --- Toast ---
@@ -429,45 +390,7 @@ export function DashboardClient() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
 
-  // --- Data loading ---
-  const refreshWorkspaces = useCallback(async () => {
-    setLoadingWorkspaces(true);
-    try {
-      const payload = await fetchJson<{ workspaces: WorkspaceWithMembership[] }>("/api/workspaces");
-      setWorkspaces(payload.workspaces);
-      setSelectedWorkspaceId((cur) =>
-        payload.workspaces.some((w) => w.workspace?.id === cur) ? cur : payload.workspaces[0]?.workspace?.id ?? "",
-      );
-    } finally {
-      setLoadingWorkspaces(false);
-    }
-  }, []);
-
-  useEffect(() => { void refreshWorkspaces(); }, [refreshWorkspaces]);
-
-  useEffect(() => {
-    if (!selectedWorkspaceId) { setProjects([]); setLoadingProjects(false); return; }
-    setLoadingProjects(true);
-    void fetchJson<{ projects: Project[] }>(`/api/projects?workspaceId=${selectedWorkspaceId}`).then((p) => {
-      setProjects(p.projects);
-      setSelectedProjectId((cur) => p.projects.some((x) => x.id === cur) ? cur : p.projects[0]?.id ?? "");
-    }).finally(() => setLoadingProjects(false));
-  }, [selectedWorkspaceId]);
-
-  useEffect(() => {
-    if (!selectedProjectId) { setEnvironments([]); setEnvironmentsMeta([]); setLoadingEnvironments(false); return; }
-    setLoadingEnvironments(true);
-    void Promise.all([
-      fetchJson<{ environments: Environment[] }>(`/api/environments?projectId=${selectedProjectId}`),
-      fetchJson<{ environments: EnvironmentWithMeta[] }>(`/api/environments/meta?projectId=${selectedProjectId}`).catch(() => ({ environments: [] as EnvironmentWithMeta[] }))
-    ]).then(([envRes, metaRes]) => {
-      setEnvironments(envRes.environments);
-      setEnvironmentsMeta(metaRes.environments);
-      setSelectedEnvironmentId((cur) => envRes.environments.some((x) => x.id === cur) ? cur : envRes.environments[0]?.id ?? "");
-    }).finally(() => setLoadingEnvironments(false));
-  }, [selectedProjectId]);
-
-  // Auto-expand the project that contains the selected environment
+  // --- Auto-expand project in sidebar tree ---
   useEffect(() => {
     if (selectedProjectId) {
       setExpandedProjects((prev) => {
@@ -478,52 +401,25 @@ export function DashboardClient() {
     }
   }, [selectedProjectId]);
 
-  // Load members/invites when settings view is active
-  const refreshMembers = useCallback(async () => {
-    if (!selectedWorkspaceId) return;
-    setLoadingMembers(true);
-    try {
-      const [membersRes, invitesRes] = await Promise.all([
-        fetchJson<{ members: MemberWithProfile[] }>(`/api/members?workspaceId=${selectedWorkspaceId}`),
-        isOwnerOrAdmin
-          ? fetchJson<{ invites: Invite[] }>(`/api/invites?workspaceId=${selectedWorkspaceId}`)
-          : Promise.resolve({ invites: [] as Invite[] }),
-      ]);
-      setMembers(membersRes.members);
-      setPendingInvites(invitesRes.invites);
-    } catch {
-      // User may not have permission to list invites
-    } finally {
-      setLoadingMembers(false);
-    }
-  }, [selectedWorkspaceId, isOwnerOrAdmin]);
-
+  // --- Load members when settings view opens ---
   useEffect(() => {
     if (activeView === "settings" && selectedWorkspaceId) {
       void refreshMembers();
     }
   }, [activeView, selectedWorkspaceId, refreshMembers]);
 
-  // When environment changes, reset crypto state and load secret sets
+  // --- Reset crypto when environment changes ---
   useEffect(() => {
     setDerivedKey(null);
     setEnvPassword("");
     setEnvEntries([]);
     setDirtyFlag(false);
     setShowPassword(false);
-    setSelectedSecretSetId("");
+    setLatestRevision(null);
+    setHistory([]);
+  }, [selectedEnvironmentId]);
 
-    if (!selectedEnvironmentId) {
-      setSecretSets([]);
-      setLatestRevision(null);
-      setHistory([]);
-      return;
-    }
-
-    void loadEnvironmentSecretSets(selectedEnvironmentId);
-  }, [selectedEnvironmentId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // When selected file (secretSet) changes, load its revision history
+  // --- Load revision history when secret set changes ---
   useEffect(() => {
     setEnvEntries([]);
     setDirtyFlag(false);
@@ -538,7 +434,6 @@ export function DashboardClient() {
 
     void (async () => {
       await loadSecretSetMeta(selectedSecretSetId);
-      // If already unlocked, auto-decrypt the new file's latest revision
       if (derivedKey) {
         try {
           const lp = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${selectedSecretSetId}`);
@@ -556,45 +451,13 @@ export function DashboardClient() {
     })();
   }, [selectedSecretSetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function loadEnvironmentSecretSets(environmentId: string) {
-    setLoadingSecrets(true);
-    try {
-      const meta = environmentsMeta.find((m) => m.environment.id === environmentId);
-      if (meta && meta.files.length > 0) {
-        // Fetch full secret sets
-        const sp = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
-        setSecretSets(sp.secretSets);
-        // Auto-select first file
-        if (sp.secretSets.length > 0) {
-          setSelectedSecretSetId(sp.secretSets[0].id);
-        }
-      } else {
-        // Legacy: single secret set per environment
-        const sp = await fetchJson<{ secretSet: SecretSet | null }>(`/api/secret-sets?environmentId=${environmentId}`);
-        if (sp.secretSet) {
-          setSecretSets([sp.secretSet]);
-          setSelectedSecretSetId(sp.secretSet.id);
-        } else {
-          setSecretSets([]);
-        }
-      }
-    } finally {
-      setLoadingSecrets(false);
-    }
-  }
-
   async function loadSecretSetMeta(secretSetId: string) {
-    setLoadingSecrets(true);
-    try {
-      const [hp, lp] = await Promise.all([
-        fetchJson<{ revisions: SecretRevision[] }>(`/api/revisions/history?secretSetId=${secretSetId}`),
-        fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${secretSetId}`),
-      ]);
-      setHistory(hp.revisions.slice().sort((a, b) => b.revision - a.revision));
-      setLatestRevision(lp.revision);
-    } finally {
-      setLoadingSecrets(false);
-    }
+    const [hp, lp] = await Promise.all([
+      fetchJson<{ revisions: SecretRevision[] }>(`/api/revisions/history?secretSetId=${secretSetId}`),
+      fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${secretSetId}`),
+    ]);
+    setHistory(hp.revisions.slice().sort((a, b) => b.revision - a.revision));
+    setLatestRevision(lp.revision);
   }
 
   // --- Unlock environment with password ---
@@ -763,7 +626,7 @@ export function DashboardClient() {
         setModal(null);
         setModalName("");
         await refreshWorkspaces();
-        setSelectedWorkspaceId(payload.workspaceId);
+        selectWorkspace(payload.workspaceId);
         pushToast("Workspace created.", "success");
       } catch (err) {
         pushToast(err instanceof Error ? err.message : "Failed.", "error");
@@ -783,7 +646,7 @@ export function DashboardClient() {
         setModal(null);
         setModalName("");
         pushToast("Project created.", "success");
-        setSelectedProjectId(payload.projectId);
+        selectProject(payload.projectId);
       } catch (err) {
         pushToast(err instanceof Error ? err.message : "Failed.", "error");
       }
@@ -805,10 +668,8 @@ export function DashboardClient() {
         setModalName("");
         setModalPassword("");
         pushToast("Environment created. Use your password to unlock it.", "success");
-        // Reload environments and select the new one
-        const ep = await fetchJson<{ environments: Environment[] }>(`/api/environments?projectId=${selectedProjectId}`);
-        setEnvironments(ep.environments);
-        setSelectedEnvironmentId(payload.environmentId);
+        await refreshEnvironments();
+        selectEnvironment(payload.environmentId);
       } catch (err) {
         pushToast(err instanceof Error ? err.message : "Failed.", "error");
       }
@@ -966,7 +827,7 @@ export function DashboardClient() {
                     <button
                       key={w.workspace.id}
                       className={`sidebar-item${w.workspace.id === selectedWorkspaceId ? " active" : ""}`}
-                      onClick={() => { setSelectedWorkspaceId(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); }}
+                      onClick={() => { selectWorkspace(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); }}
                     >
                       <IconBox size={14} />
                       <span style={{ flex: 1, textAlign: "left" }}>{w.workspace.name}</span>
@@ -1011,7 +872,7 @@ export function DashboardClient() {
                   <button
                     className={`sidebar-item${proj.id === selectedProjectId ? " active" : ""}`}
                     onClick={() => {
-                      setSelectedProjectId(proj.id);
+                      selectProject(proj.id);
                       toggleProjectExpanded(proj.id);
                       setActiveView("secrets");
                     }}
@@ -1037,7 +898,7 @@ export function DashboardClient() {
                             <button
                               className={`sidebar-item${isSelected ? " active" : ""}`}
                               style={{ paddingLeft: 8 }}
-                              onClick={() => { setSelectedEnvironmentId(env.id); setActiveView("secrets"); }}
+                              onClick={() => { selectEnvironment(env.id); setActiveView("secrets"); }}
                             >
                               <IconLayers size={13} />
                               <span style={{ flex: 1, textAlign: "left" }}>{env.name}</span>
@@ -1056,7 +917,7 @@ export function DashboardClient() {
                                     key={ss.id}
                                     className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""}`}
                                     style={{ fontSize: 12, padding: "3px 8px" }}
-                                    onClick={() => setSelectedSecretSetId(ss.id)}
+                                    onClick={() => selectSecretSet(ss.id)}
                                   >
                                     <IconFile size={11} />
                                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{ss.filePath || ".env"}</span>
