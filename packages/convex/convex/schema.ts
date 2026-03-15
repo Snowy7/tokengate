@@ -39,6 +39,7 @@ export default defineSchema({
     projectId: v.id("projects"),
     name: v.string(),
     slug: v.string(),
+    keySalt: v.string(),
     createdAt: v.number()
   }).index("by_project", ["projectId"]),
 

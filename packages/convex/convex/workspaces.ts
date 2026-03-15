@@ -107,7 +107,7 @@ export const createEnvironment = mutation({
     projectId: v.id("projects"),
     name: v.string(),
     slug: v.string(),
-    keySalt: v.optional(v.string()),
+    keySalt: v.string(),
     filePath: v.optional(v.string())
   },
   handler: async (ctx, args) => {
@@ -121,10 +121,10 @@ export const createEnvironment = mutation({
       projectId: args.projectId,
       name: args.name,
       slug: args.slug,
+      keySalt: args.keySalt,
       createdAt: Date.now()
     });
 
-    // Store keySalt on the environment level for later use when adding files
     // Do NOT auto-create a secretSet — files are added explicitly via addSecretSet
 
     await createAuditEvent(ctx, {
@@ -203,10 +203,7 @@ export const addSecretSet = mutation({
     let keySalt = args.keySalt;
     if (!keySalt) {
       const existing = existingSets[0];
-      if (!existing) {
-        throw new Error("No existing secret set found to inherit keySalt from. Provide keySalt explicitly.");
-      }
-      keySalt = existing.keySalt;
+      keySalt = existing?.keySalt ?? environment.keySalt;
     }
 
     const secretSetId = await ctx.db.insert("secretSets", {

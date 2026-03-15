@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as deletions from "../deletions.js";
 import type * as devices from "../devices.js";
 import type * as fileSchemas from "../fileSchemas.js";
 import type * as integrations from "../integrations.js";
@@ -26,6 +27,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  deletions: typeof deletions;
   devices: typeof devices;
   fileSchemas: typeof fileSchemas;
   integrations: typeof integrations;

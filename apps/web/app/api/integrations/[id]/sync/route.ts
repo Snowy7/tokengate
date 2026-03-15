@@ -54,7 +54,15 @@ export async function POST(
         await client.mutation(convexFunctions.updateIntegrationSyncStatus, {
           integrationId: id, status: "success",
         });
-        return NextResponse.json({ success: true, direction: "pull", count: 0, schemaCreated: false });
+        return NextResponse.json({
+          success: true,
+          direction: "pull",
+          count: 0,
+          schemaCreated: false,
+          filePath: mapping?.filePath ?? ".env",
+          environmentId: mapping?.environmentId ?? null,
+          vars: [],
+        });
       }
 
       // 2. Auto-generate schema from pulled vars
@@ -106,7 +114,13 @@ export async function POST(
         schemaCreated: true,
         schemaFields: mergedFields.length,
         newFields: schemaFields.filter((f) => !existingNames.has(f.name)).length,
-        vars: vars.map((v) => ({ key: v.key, sensitive: v.sensitive ?? inferType(v.key, v.value).sensitive })),
+        filePath,
+        environmentId: mapping?.environmentId ?? null,
+        vars: vars.map((v) => ({
+          key: v.key,
+          value: v.value,
+          sensitive: v.sensitive ?? inferType(v.key, v.value).sensitive,
+        })),
       });
     }
 

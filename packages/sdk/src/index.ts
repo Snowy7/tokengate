@@ -38,6 +38,7 @@ export interface Environment {
   projectId: string;
   name: string;
   slug: string;
+  keySalt: string;
   createdAt: number;
 }
 

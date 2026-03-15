@@ -363,7 +363,7 @@ export function DashboardClient() {
     selectedMembership, isOwner, isAdmin, isOwnerOrAdmin,
     loading,
     selectWorkspace, selectProject, selectEnvironment, selectSecretSet,
-    refreshWorkspaces, refreshEnvironments, refreshMembers,
+    refreshWorkspaces, refreshEnvironments, refreshSecretSets, refreshMembers,
   } = sidebar;
 
   // Aliases for loading states
@@ -553,7 +553,7 @@ export function DashboardClient() {
     if ((activeView === "schemas" || activeView === "secrets") && selectedProjectId) {
       void refreshSchemas();
     }
-    if (activeView === "integrations" && selectedProjectId) {
+    if ((activeView === "integrations" || activeView === "secrets") && selectedProjectId) {
       void refreshIntegrations();
     }
   }, [activeView, selectedProjectId, refreshSchemas, refreshIntegrations]);
@@ -562,6 +562,23 @@ export function DashboardClient() {
   const currentFileSchema = selectedSecretSet
     ? fileSchemas.find((s) => s.filePath === (selectedSecretSet.filePath || ".env")) ?? null
     : null;
+  const currentFileMeta = selectedSecretSet
+    ? environmentsMeta
+      .find((meta) => meta.environment.id === selectedEnvironmentId)
+      ?.files.find((file) => file.secretSetId === selectedSecretSet.id) ?? null
+    : null;
+  const currentIntegration = selectedSecretSet
+    ? projectIntegrations.find((integration) =>
+      integration.environmentMappings.some((mapping) =>
+        mapping.environmentId === selectedEnvironmentId &&
+        mapping.filePath === (selectedSecretSet.filePath || ".env")
+      )
+    ) ?? null
+    : null;
+  const currentIntegrationMapping = currentIntegration?.environmentMappings.find((mapping) =>
+    mapping.environmentId === selectedEnvironmentId &&
+    mapping.filePath === (selectedSecretSet?.filePath || ".env")
+  ) ?? null;
 
   // --- Reset crypto when environment changes ---
   useEffect(() => {
@@ -615,9 +632,123 @@ export function DashboardClient() {
     setLatestRevision(lp.revision);
   }
 
+  async function storeIntegrationPull(result: {
+    count: number;
+    schemaCreated?: boolean;
+    schemaFields?: number;
+    newFields?: number;
+    filePath: string;
+    environmentId: string | null;
+    vars: Array<{ key: string; value: string; sensitive?: boolean }>;
+  }) {
+    if (!result.environmentId) {
+      throw new Error("Integration is missing an environment mapping.");
+    }
+    if (result.environmentId !== selectedEnvironmentId) {
+      throw new Error("Select the mapped environment before syncing this integration.");
+    }
+    if (!derivedKey) {
+      throw new Error("Unlock the mapped environment before syncing this integration.");
+    }
+
+    let targetSecretSetId =
+      secretSets.find((ss) => (ss.filePath || ".env") === result.filePath)?.id ?? null;
+
+    if (!targetSecretSetId) {
+      const created = await postJson<{ secretSetId: string }>("/api/secret-sets/add", {
+        environmentId: result.environmentId,
+        filePath: result.filePath,
+      });
+      targetSecretSetId = created.secretSetId;
+    }
+
+    const latestForTarget = await fetchJson<{ revision: SecretRevision | null }>(
+      `/api/revisions/latest?secretSetId=${targetSecretSetId}`
+    );
+    const normalized = normalizeEnvDocument(
+      stringifyEnvEntries(result.vars.map((v) => ({ key: v.key, value: v.value })))
+    );
+    const encrypted = await encryptRevisionPayload(normalized, derivedKey);
+    const revisionResult = await postJson<{
+      conflict: boolean;
+      acceptedRevision?: number;
+      latestRevision?: number;
+    }>("/api/revisions", {
+      secretSetId: targetSecretSetId,
+      baseRevision: latestForTarget.revision?.revision,
+      ciphertext: encrypted.ciphertext,
+      wrappedDataKey: encrypted.wrappedDataKey,
+      contentHash: encrypted.contentHash,
+    });
+
+    if (revisionResult.conflict) {
+      throw new Error(`Conflict: remote is at revision ${revisionResult.latestRevision}. Reload and retry.`);
+    }
+
+    await refreshEnvironments();
+    await refreshSecretSets();
+    selectSecretSet(targetSecretSetId);
+
+    const latestStored = await fetchJson<{ revision: SecretRevision | null }>(
+      `/api/revisions/latest?secretSetId=${targetSecretSetId}`
+    );
+    setLatestRevision(latestStored.revision);
+    setEnvEntries(parseEnvDocument(normalized));
+    setDirtyFlag(false);
+  }
+
+  async function pullIntegrationToFile(integration: Integration, mappingIndex = 0) {
+    const mapping = integration.environmentMappings[mappingIndex];
+    if (!mapping) {
+      throw new Error("Integration has no environment mapping.");
+    }
+
+    const result = await postJson<{
+      count: number;
+      schemaCreated?: boolean;
+      schemaFields?: number;
+      newFields?: number;
+      filePath: string;
+      environmentId: string | null;
+      vars: Array<{ key: string; value: string; sensitive?: boolean }>;
+    }>(`/api/integrations/${integration.id}/sync`, { direction: "pull", mappingIndex });
+
+    await storeIntegrationPull(result);
+    await refreshIntegrations();
+    await refreshSchemas();
+
+    const parts = [`Pulled ${result.count} vars into ${result.filePath}`];
+    if (result.schemaCreated) {
+      parts.push(`schema: ${result.schemaFields} fields (${result.newFields} new)`);
+    }
+    pushToast(parts.join(" — "), "success");
+  }
+
+  async function pushCurrentFileToIntegration() {
+    if (!currentIntegration || !currentIntegrationMapping) {
+      throw new Error("This file is not backed by an integration.");
+    }
+
+    const mappingIndex = currentIntegration.environmentMappings.findIndex((mapping) =>
+      mapping.environmentId === currentIntegrationMapping.environmentId &&
+      mapping.filePath === currentIntegrationMapping.filePath
+    );
+
+    await postJson<{ count: number }>(`/api/integrations/${currentIntegration.id}/sync`, {
+      direction: "push",
+      mappingIndex,
+      vars: envEntries.filter((entry) => entry.key.trim()).map((entry) => ({
+        key: entry.key,
+        value: entry.value,
+      })),
+    });
+    await refreshIntegrations();
+    pushToast(`Pushed ${envEntries.filter((entry) => entry.key.trim()).length} vars to ${currentIntegration.provider}.`, "success");
+  }
+
   // --- Unlock environment with password ---
   function handleUnlockEnv() {
-    const keySalt = secretSets[0]?.keySalt;
+    const keySalt = selectedEnvironment?.keySalt || secretSets[0]?.keySalt;
     if (!keySalt || !envPassword) return;
     startTransition(async () => {
       try {
@@ -1227,7 +1358,7 @@ export function DashboardClient() {
                 {activeView === "integrations" && <><IconChevron size={12} /><span>Integrations</span></>}
                 {activeView === "secrets" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
                 {activeView === "secrets" && selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
-                {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><span className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>{selectedSecretSet.filePath || ".env"}</span></>}
+                {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><FileSourceIcon source={currentFileMeta?.source} size={12} /><span className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>{selectedSecretSet.filePath || ".env"}</span></>}
               </>
             )}
             {!selectedWorkspace && !loadingWorkspaces && <span className="muted">Select a workspace to begin</span>}
@@ -1240,7 +1371,7 @@ export function DashboardClient() {
                 <span className="tag cursor-pointer" onClick={handleLockEnv}><IconUnlock size={12} /> Unlocked</span>
               </>
             )}
-            {!isEnvUnlocked && selectedEnvironment && secretSets.length > 0 && (
+            {!isEnvUnlocked && selectedEnvironment && (
               <span className="tag locked"><IconLock size={12} /> Locked</span>
             )}
           </div>
@@ -1561,12 +1692,7 @@ export function DashboardClient() {
                           <button className="button sm" disabled={isPending} onClick={() => {
                             startTransition(async () => {
                               try {
-                                const result = await postJson<{ count: number; schemaCreated?: boolean; schemaFields?: number; newFields?: number }>(`/api/integrations/${integ.id}/sync`, { direction: "pull" });
-                                const parts = [`Pulled ${result.count} vars`];
-                                if (result.schemaCreated) parts.push(`schema: ${result.schemaFields} fields (${result.newFields} new)`);
-                                pushToast(parts.join(" — "), "success");
-                                void refreshIntegrations();
-                                void refreshSchemas();
+                                await pullIntegrationToFile(integ);
                               } catch (err) { pushToast(err instanceof Error ? err.message : "Sync failed.", "error"); }
                             });
                           }}>Pull + Schema</button>
@@ -1714,7 +1840,7 @@ export function DashboardClient() {
         )}
 
         {/* Environment selected but locked */}
-        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length > 0 && !isEnvUnlocked && (
+        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && !isEnvUnlocked && (
           <div className="lock-screen fade-in">
             <div className="lock-icon"><IconLock size={32} /></div>
             <h2 className="mb-2">Enter environment password</h2>
@@ -1750,11 +1876,11 @@ export function DashboardClient() {
         )}
 
         {/* Environment selected, no secret sets (edge case — only after loading) */}
-        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length === 0 && (
+        {activeView === "secrets" && !loadingSecrets && selectedEnvironmentId && secretSets.length === 0 && isEnvUnlocked && (
           <div className="empty-state fade-in">
             <IconShield size={40} />
-            <h3 className="mt-3 mb-1">No secret set</h3>
-            <p className="muted">This environment is missing its secret store. Try recreating it.</p>
+            <h3 className="mt-3 mb-1">No files yet</h3>
+            <p className="muted">Pull an integration or add a file to create the first encrypted secret set for this environment.</p>
           </div>
         )}
 
@@ -1766,7 +1892,13 @@ export function DashboardClient() {
                   <div className="ed1-tabs">
                     {secretSets.map((ss) => (
                       <button key={ss.id} className={`ed1-tab${ss.id === selectedSecretSetId ? " active" : ""}`} onClick={() => selectSecretSet(ss.id)}>
-                        <IconFile size={12} />{ss.filePath || ".env"}
+                        <FileSourceIcon
+                          source={environmentsMeta
+                            .find((meta) => meta.environment.id === selectedEnvironmentId)
+                            ?.files.find((file) => file.secretSetId === ss.id)?.source}
+                          size={12}
+                        />
+                        {ss.filePath || ".env"}
                       </button>
                     ))}
                   </div>
@@ -1775,6 +1907,37 @@ export function DashboardClient() {
                     <button className="icon-button" onClick={() => setMaskedValues(!maskedValues)} title={maskedValues ? "Reveal values" : "Mask values"}>
                       {maskedValues ? <IconEye size={14} /> : <IconEyeOff size={14} />}
                     </button>
+                    {currentIntegration && (
+                      <>
+                        <span className="tag text-[9px]"><FileSourceIcon source={currentIntegration.provider} size={10} /> {currentIntegration.provider}</span>
+                        <button className="button sm secondary" disabled={isPending} onClick={() => {
+                          startTransition(async () => {
+                            try {
+                              const mappingIndex = currentIntegration.environmentMappings.findIndex((mapping) =>
+                                mapping.environmentId === selectedEnvironmentId &&
+                                mapping.filePath === (selectedSecretSet.filePath || ".env")
+                              );
+                              await pullIntegrationToFile(currentIntegration, mappingIndex);
+                            } catch (err) {
+                              pushToast(err instanceof Error ? err.message : "Pull failed.", "error");
+                            }
+                          });
+                        }}>
+                          Pull
+                        </button>
+                        <button className="button sm secondary" disabled={isPending} onClick={() => {
+                          startTransition(async () => {
+                            try {
+                              await pushCurrentFileToIntegration();
+                            } catch (err) {
+                              pushToast(err instanceof Error ? err.message : "Push failed.", "error");
+                            }
+                          });
+                        }}>
+                          Push
+                        </button>
+                      </>
+                    )}
                     {currentFileSchema && <span className="tag encrypted text-[9px]">schema v{currentFileSchema.version}</span>}
                     {dirtyFlag && <span className="tag text-[10px]">unsaved</span>}
                     <button className="button sm" onClick={handleSaveRevision} disabled={isPending || envEntries.length === 0}>
@@ -1975,7 +2138,7 @@ export function DashboardClient() {
 
                 {/* Status bar */}
                 <div className="ed1-status">
-                  <span>{selectedSecretSet.filePath || ".env"}</span>
+                  <span className="inline-flex items-center gap-1"><FileSourceIcon source={currentFileMeta?.source} size={10} />{selectedSecretSet.filePath || ".env"}</span>
                   <span>{envEntries.length} variable{envEntries.length !== 1 ? "s" : ""}</span>
                   {latestRevision && <span>r{latestRevision.revision}</span>}
                   <span className="tag encrypted text-[9px] py-px px-[5px]">E2E</span>
