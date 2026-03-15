@@ -77,8 +77,6 @@ jobs:
         if: steps.check.outputs.skip == 'false' && steps.ver.outputs.exists == 'false'
         working-directory: ${{ matrix.package.path }}
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # Step 2: @tokengate/env (depends on crypto + env-format)
   publish-env:
@@ -136,8 +134,6 @@ jobs:
         if: steps.check.outputs.skip == 'false' && steps.ver.outputs.exists == 'false'
         working-directory: packages/env
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # Step 3: Framework plugins (depend on @tokengate/env)
   publish-plugins:
@@ -202,5 +198,3 @@ jobs:
         if: steps.check.outputs.skip == 'false' && steps.ver.outputs.exists == 'false'
         working-directory: ${{ matrix.package.path }}
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
