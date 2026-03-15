@@ -298,6 +298,9 @@ export const convexFunctions = {
   updateIntegration: "integrations:update",
   removeIntegration: "integrations:remove",
   updateIntegrationSyncStatus: "integrations:updateSyncStatus",
+  deleteProject: "deletions:deleteProject",
+  deleteEnvironment: "deletions:deleteEnvironment",
+  deleteSecretSet: "deletions:deleteSecretSet",
 } as const;
 
 export type ConvexFunctionName = (typeof convexFunctions)[keyof typeof convexFunctions];

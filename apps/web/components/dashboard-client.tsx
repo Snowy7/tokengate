@@ -419,6 +419,26 @@ export function DashboardClient() {
   const [searchFilter, setSearchFilter] = useState("");
   const [maskedValues, setMaskedValues] = useState(true);
 
+  // --- Context menu ---
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number; y: number;
+    items: Array<{ label: string; destructive?: boolean; onClick: () => void }>;
+  } | null>(null);
+
+  function showContextMenu(e: React.MouseEvent, items: Array<{ label: string; destructive?: boolean; onClick: () => void }>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, items });
+  }
+
+  // Close context menu on any click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [ctxMenu]);
+
   // --- Sidebar UI ---
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -911,6 +931,61 @@ export function DashboardClient() {
     });
   }
 
+  // --- Delete handlers ---
+  function handleDeleteProject(projectId: string, projectName: string) {
+    setConfirmAction({
+      title: "Delete project",
+      message: `Permanently delete "${projectName}" and all its environments, files, and revisions? This cannot be undone.`,
+      destructive: true,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            await deleteJson(`/api/projects/${projectId}`);
+            pushToast(`Project "${projectName}" deleted.`, "success");
+            void refreshWorkspaces();
+          } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
+        });
+      },
+    });
+  }
+
+  function handleDeleteEnvironment(envId: string, envName: string) {
+    setConfirmAction({
+      title: "Delete environment",
+      message: `Permanently delete "${envName}" and all its files and revisions? This cannot be undone.`,
+      destructive: true,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            await deleteJson(`/api/environments/${envId}`);
+            pushToast(`Environment "${envName}" deleted.`, "success");
+            void refreshEnvironments();
+          } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
+        });
+      },
+    });
+  }
+
+  function handleDeleteFile(ssId: string, filePath: string) {
+    setConfirmAction({
+      title: "Delete file",
+      message: `Permanently delete "${filePath}" and all its revision history? This cannot be undone.`,
+      destructive: true,
+      onConfirm: () => {
+        setConfirmAction(null);
+        startTransition(async () => {
+          try {
+            await deleteJson(`/api/secret-sets/${ssId}`);
+            pushToast(`File "${filePath}" deleted.`, "success");
+            void refreshEnvironments();
+          } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
+        });
+      },
+    });
+  }
+
   // --- Editor helpers ---
   function updateEntry(index: number, field: "key" | "value", val: string) {
     setEnvEntries((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: val } : e)));
@@ -1026,6 +1101,9 @@ export function DashboardClient() {
                       toggleProjectExpanded(proj.id);
                       setActiveView("secrets");
                     }}
+                    onContextMenu={(e) => showContextMenu(e, [
+                      { label: "Delete project", destructive: true, onClick: () => handleDeleteProject(proj.id, proj.name) },
+                    ])}
                   >
                     <span className="inline-flex transition-transform duration-[120ms] ease-in-out" style={{ transform: isExpanded ? "rotate(90deg)" : "none" }}>
                       <IconChevron size={12} />
@@ -1048,6 +1126,9 @@ export function DashboardClient() {
                             <button
                               className={`sidebar-item${isSelected ? " active" : ""} pl-2`}
                               onClick={() => { selectEnvironment(env.id); setActiveView("secrets"); setMobileSidebarOpen(false); }}
+                              onContextMenu={(e) => showContextMenu(e, [
+                                { label: "Delete environment", destructive: true, onClick: () => handleDeleteEnvironment(env.id, env.name) },
+                              ])}
                             >
                               <IconLayers size={13} />
                               <span className="flex-1 text-left">{env.name}</span>
@@ -1068,6 +1149,9 @@ export function DashboardClient() {
                                       key={ss.id}
                                       className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""} text-xs py-[3px] px-2`}
                                       onClick={() => selectSecretSet(ss.id)}
+                                      onContextMenu={(e) => showContextMenu(e, [
+                                        { label: "Delete file", destructive: true, onClick: () => handleDeleteFile(ss.id, ss.filePath || ".env") },
+                                      ])}
                                     >
                                       <FileSourceIcon source={(fileMeta as { source?: string } | undefined)?.source} size={10} />
                                       <span className="text-[11px]" style={{ fontFamily: "var(--font-mono)" }}>{ss.filePath || ".env"}</span>
@@ -2091,6 +2175,27 @@ export function DashboardClient() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONTEXT MENU */}
+      {ctxMenu && (
+        <div
+          className="fixed z-[2000]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          <div className="border-3 border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)] min-w-[160px]" style={{ fontFamily: "var(--font-mono)" }}>
+            {ctxMenu.items.map((item, i) => (
+              <button
+                key={i}
+                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase tracking-wider border-0 cursor-pointer transition-colors duration-75 hover:bg-[var(--surface-hover)] ${item.destructive ? "text-[var(--error)] hover:bg-[var(--error-bg)]" : "text-[var(--text)]"}`}
+                style={{ background: "transparent" }}
+                onClick={(e) => { e.stopPropagation(); setCtxMenu(null); item.onClick(); }}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </div>
       )}
