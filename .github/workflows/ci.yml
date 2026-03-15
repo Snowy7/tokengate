@@ -1,6 +1,4 @@
 # Triggered on: every push to main + every pull request
-# - verify: runs tests and typecheck (always)
-# - deploy-convex: deploys Convex schema/functions (only on main push, after verify passes)
 name: ci
 
 on:
@@ -25,8 +23,11 @@ jobs:
       - name: Run package tests
         run: bun test packages
 
+      - name: Typecheck Convex
+        run: cd packages/convex && npx tsc --noEmit
+
       - name: Typecheck CLI
-        run: bunx tsc --noEmit -p apps/cli/tsconfig.json
+        run: cd apps/cli && npx tsc --noEmit
 
       - name: Build CLI
         run: cd apps/cli && bun run build
