@@ -6,10 +6,10 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { parseEnvDocument } from "@tokengate/env-format";
 import { decryptRevisionPayload, deriveEnvironmentKey, encryptVaultPayload, decryptVaultPayload } from "@tokengate/crypto";
-import type { EnvSchema, InferEnv, ValidationError } from "./schema";
-import { validateEnv, maskSensitive } from "./schema";
-import type { ResolvedConfig } from "./config";
-import { resolveConfig, type TokengateConfig } from "./config";
+import type { EnvSchema, InferEnv, ValidationError } from "./schema.js";
+import { validateEnv, maskSensitive } from "./schema.js";
+import type { ResolvedConfig } from "./config.js";
+import { resolveConfig, type TokengateConfig } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Types

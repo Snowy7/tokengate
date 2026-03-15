@@ -2,14 +2,14 @@
 // @tokengate/env — Type-safe encrypted environment variables
 // ---------------------------------------------------------------------------
 
-export { defineConfig } from "./config";
-export type { TokengateConfig, ResolvedConfig } from "./config";
+export { defineConfig } from "./config.js";
+export type { TokengateConfig, ResolvedConfig } from "./config.js";
 
-export { validateEnv, parseValue, maskSensitive } from "./schema";
-export type { EnvSchema, EnvVarSchema, EnvType, InferEnv, ValidationError } from "./schema";
+export { validateEnv, parseValue, maskSensitive } from "./schema.js";
+export type { EnvSchema, EnvVarSchema, EnvType, InferEnv, ValidationError } from "./schema.js";
 
-export { loadEnv, clearCache, EnvValidationError } from "./loader";
-export type { LoadResult } from "./loader";
+export { loadEnv, clearCache, EnvValidationError } from "./loader.js";
+export type { LoadResult } from "./loader.js";
 
 // ---------------------------------------------------------------------------
 // Convenience: createEnv — one-shot define + load
@@ -18,11 +18,11 @@ export type { LoadResult } from "./loader";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEnvDocument } from "@tokengate/env-format";
-import type { EnvSchema, InferEnv } from "./schema";
-import type { TokengateConfig } from "./config";
-import { defineConfig } from "./config";
-import { loadEnv } from "./loader";
-import { validateEnv } from "./schema";
+import type { EnvSchema, InferEnv } from "./schema.js";
+import type { TokengateConfig } from "./config.js";
+import { defineConfig } from "./config.js";
+import { loadEnv } from "./loader.js";
+import { validateEnv } from "./schema.js";
 
 /**
  * All-in-one: define schema + load + validate in a single call.

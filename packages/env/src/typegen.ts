@@ -2,7 +2,7 @@
 // Type generation — outputs a .d.ts file from a schema
 // ---------------------------------------------------------------------------
 
-import type { EnvSchema, EnvVarSchema, EnvType } from "./schema";
+import type { EnvSchema, EnvVarSchema, EnvType } from "./schema.js";
 
 function tsType(schema: EnvVarSchema): string {
   const map: Record<EnvType, string> = {

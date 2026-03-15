@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tokengate + Vite Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; border-radius: 0 !important; }
+    body { font-family: 'Space Mono', monospace; background: #0f1412; color: #e8e8e8; padding: 40px; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p { color: #999; margin-bottom: 32px; font-size: 14px; }
+    code { background: #1a2a1f; padding: 2px 6px; color: #00d68f; }
+    table { border-collapse: collapse; width: 100%; max-width: 600px; font-size: 14px; }
+    th { text-align: left; padding: 8px 16px; color: #00d68f; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 3px solid #00d68f; }
+    td { padding: 8px 16px; border-bottom: 1px solid #1e2a24; }
+    .key { color: #00d68f; font-weight: 700; }
+    .val { color: #ccc; }
+    .info { margin-top: 32px; padding: 16px; background: #0d2e1f; border: 3px solid #00d68f; font-size: 12px; color: #999; }
+    .info strong { color: #00d68f; }
+  </style>
+</head>
+<body>
+  <h1>Tokengate + Vite</h1>
+  <p>
+    Client-safe <code>VITE_*</code> variables injected at build time via <code>@tokengate/env-vite</code>.
+    No <code>.env</code> file on disk.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Variable</th><th>Value</th></tr>
+    </thead>
+    <tbody id="vars"></tbody>
+  </table>
+  <div class="info">
+    <strong>How this works:</strong> The Vite plugin loads env vars from Tokengate cloud at dev/build time.
+    Variables prefixed with <code>VITE_</code> are injected into <code>import.meta.env</code> (client-safe).
+    Server-only vars (DATABASE_URL, API_KEY) are in <code>process.env</code> during SSR only.
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

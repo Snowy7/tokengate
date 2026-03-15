@@ -2,7 +2,7 @@
 // Configuration — defineConfig for tokengate.config.ts
 // ---------------------------------------------------------------------------
 
-import type { EnvSchema, InferEnv } from "./schema";
+import type { EnvSchema, InferEnv } from "./schema.js";
 
 export interface TokengateConfig<S extends EnvSchema = EnvSchema> {
   /** Project slug or ID */
