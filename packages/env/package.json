@@ -1,6 +1,6 @@
 {
   "name": "@tokengate/env",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Type-safe, encrypted environment variables from Tokengate cloud",
   "type": "module",
   "main": "./dist/index.js",
@@ -63,8 +63,8 @@
     "url": "https://github.com/Snowy7/tokengate/issues"
   },
   "dependencies": {
-    "@tokengate/crypto": "^0.3.0",
-    "@tokengate/env-format": "^0.3.0"
+    "@tokengate/crypto": "^0.3.1",
+    "@tokengate/env-format": "^0.3.1"
   },
   "engines": {
     "node": ">=18.0.0"

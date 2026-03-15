@@ -1,6 +1,6 @@
 {
   "name": "@tokengate/env-format",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Parser and serializer for .env files",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@tokengate/env-next",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Tokengate environment variable integration for Next.js",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,6 +40,6 @@
     "next": ">=14.0.0"
   },
   "dependencies": {
-    "@tokengate/env": "^0.2.0"
+    "@tokengate/env": "^0.2.1"
   }
 }
