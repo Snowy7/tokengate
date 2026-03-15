@@ -15,10 +15,14 @@ export type { LoadResult } from "./loader";
 // Convenience: createEnv — one-shot define + load
 // ---------------------------------------------------------------------------
 
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parseEnvDocument } from "@tokengate/env-format";
 import type { EnvSchema, InferEnv } from "./schema";
 import type { TokengateConfig } from "./config";
 import { defineConfig } from "./config";
 import { loadEnv } from "./loader";
+import { validateEnv } from "./schema";
 
 /**
  * All-in-one: define schema + load + validate in a single call.
@@ -64,11 +68,6 @@ export async function createEnv<S extends EnvSchema>(
 export function createEnvSync<S extends EnvSchema>(
   config: Omit<TokengateConfig<S>, "sources"> & { sources?: Array<"file" | "process"> },
 ): Readonly<InferEnv<S>> {
-  const { existsSync, readFileSync } = require("node:fs");
-  const { resolve } = require("node:path");
-  const { parseEnvDocument } = require("@tokengate/env-format");
-  const { validateEnv } = require("./schema");
-
   const resolved = {
     file: config.file ?? ".env",
     schema: config.schema,
@@ -108,7 +107,7 @@ export function createEnvSync<S extends EnvSchema>(
   const { env, errors } = validateEnv(raw, resolved.schema);
 
   if (errors.length > 0) {
-    const message = errors.map((e: { key: string; message: string }) => `  ${e.key}: ${e.message}`).join("\n");
+    const message = errors.map((e) => `  ${e.key}: ${e.message}`).join("\n");
     if (resolved.onError === "throw") {
       throw new Error(`Environment validation failed:\n${message}`);
     } else if (resolved.onError === "warn") {

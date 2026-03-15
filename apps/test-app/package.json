@@ -1,0 +1,12 @@
+{
+  "name": "@tokengate/test-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tokengate/env": "workspace:*"
+  }
+}
