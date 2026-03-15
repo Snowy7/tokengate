@@ -26,6 +26,12 @@ jobs:
       - name: Typecheck Convex
         run: bunx tsc --noEmit -p packages/convex/tsconfig.json
 
+      - name: Build CLI workspace dependencies
+        run: |
+          bun --cwd packages/crypto run build
+          bun --cwd packages/env-format run build
+          bun --cwd packages/env run build
+
       - name: Typecheck CLI
         run: bunx tsc --noEmit -p apps/cli/tsconfig.json
 
