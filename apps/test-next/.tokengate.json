@@ -1,0 +1,15 @@
+{
+  "workspaceId": "k97aj9cxsk4796dvay7h9y54nn82pvfb",
+  "workspaceName": "Snowy",
+  "projectId": "jn7dr4hnt9q8ydyt6az38p4wzd82yy05",
+  "projectName": "test-app",
+  "environmentId": "jd71wcg71jyqcpw6z8mmvs4qex82yea3",
+  "environmentName": "development",
+  "mappings": {
+    ".env": {
+      "secretSetId": "jx77vecax7x64377rxbtvssp2982ynk0",
+      "environmentId": "jd71wcg71jyqcpw6z8mmvs4qex82yea3",
+      "environmentName": "development"
+    }
+  }
+}

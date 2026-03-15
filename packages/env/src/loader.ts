@@ -55,16 +55,44 @@ interface CliConfig {
 }
 
 // ---------------------------------------------------------------------------
+// In-memory cache — avoids hitting Convex on every request
+// ---------------------------------------------------------------------------
+
+interface MemCacheEntry {
+  raw: Record<string, string>;
+  source: string;
+  expiresAt: number;
+}
+
+const memCache = new Map<string, MemCacheEntry>();
+
+function getMemCacheKey<S extends EnvSchema>(config: ResolvedConfig<S>): string {
+  return `${config.environment}:${config.file}`;
+}
+
+// ---------------------------------------------------------------------------
 // Main loader
 // ---------------------------------------------------------------------------
 
 /**
  * Load environment variables from configured sources.
  * Tries each source in order until one succeeds.
+ * Results are cached in-memory for `cacheTtl` ms (default 5 min).
  */
 export async function loadEnv<S extends EnvSchema>(config: TokengateConfig<S>): Promise<LoadResult<S>> {
   const resolved = resolveConfig(config);
   const start = Date.now();
+
+  // Check in-memory cache first
+  if (resolved.cache) {
+    const cacheKey = getMemCacheKey(resolved);
+    const cached = memCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      const { env, errors } = validateEnv(cached.raw, resolved.schema);
+      return { env, errors, source: cached.source as LoadResult<S>["source"], loadTime: Date.now() - start };
+    }
+  }
+
   let raw: Record<string, string | undefined> = {};
   let source: LoadResult<S>["source"] = "process";
 
@@ -84,7 +112,7 @@ export async function loadEnv<S extends EnvSchema>(config: TokengateConfig<S>): 
           if (cloud) {
             raw = cloud;
             source = "cloud";
-            // Save to cache for next time
+            // Save to file cache for cold starts
             if (resolved.cache) {
               saveToCache(resolved, cloud);
             }
@@ -133,7 +161,28 @@ export async function loadEnv<S extends EnvSchema>(config: TokengateConfig<S>): 
     }
   }
 
+  // Store in memory cache
+  if (resolved.cache && Object.keys(raw).length > 0) {
+    const cacheKey = getMemCacheKey(resolved);
+    const cleanRaw: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v !== undefined) cleanRaw[k] = v;
+    }
+    memCache.set(cacheKey, {
+      raw: cleanRaw,
+      source,
+      expiresAt: Date.now() + resolved.cacheTtl,
+    });
+  }
+
   return { env, errors, source, loadTime };
+}
+
+/**
+ * Clear the in-memory cache. Useful for testing or forcing a refresh.
+ */
+export function clearCache() {
+  memCache.clear();
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ export type { TokengateConfig, ResolvedConfig } from "./config";
 export { validateEnv, parseValue, maskSensitive } from "./schema";
 export type { EnvSchema, EnvVarSchema, EnvType, InferEnv, ValidationError } from "./schema";
 
-export { loadEnv, EnvValidationError } from "./loader";
+export { loadEnv, clearCache, EnvValidationError } from "./loader";
 export type { LoadResult } from "./loader";
 
 // ---------------------------------------------------------------------------
