@@ -380,6 +380,7 @@ export function DashboardClient() {
   const [envPassword, setEnvPassword] = useState("");
   const [derivedKey, setDerivedKey] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
 
   // --- Editor ---
   const [envEntries, setEnvEntries] = useState<EnvEntry[]>([]);
@@ -616,6 +617,7 @@ export function DashboardClient() {
   useEffect(() => {
     setDerivedKey(null);
     setEnvPassword("");
+    setUnlockError(null);
     setEnvEntries([]);
     setDirtyFlag(false);
     setShowPassword(false);
@@ -683,23 +685,37 @@ export function DashboardClient() {
 
   async function verifyEnvironmentKey(environmentId: string, key: string) {
     const secretSetResponse = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
-    const candidate = secretSetResponse.secretSets[0];
-    if (!candidate) return;
+    if (secretSetResponse.secretSets.length === 0) return;
 
-    const latest = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${candidate.id}`);
-    if (!latest.revision) return;
+    let hasProtectedRevision = false;
+    for (const secretSet of secretSetResponse.secretSets) {
+      const latest = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${secretSet.id}`);
+      if (!latest.revision) {
+        continue;
+      }
 
-    await decryptRevisionPayload(
-      {
-        ciphertext: latest.revision.ciphertext,
-        wrappedDataKey: latest.revision.wrappedDataKey,
-        contentHash: latest.revision.contentHash,
-      },
-      key,
-    );
+      hasProtectedRevision = true;
+      try {
+        await decryptRevisionPayload(
+          {
+            ciphertext: latest.revision.ciphertext,
+            wrappedDataKey: latest.revision.wrappedDataKey,
+            contentHash: latest.revision.contentHash,
+          },
+          key,
+        );
+        return;
+      } catch {
+        continue;
+      }
+    }
+
+    if (hasProtectedRevision) {
+      throw new Error("Wrong password. None of this environment's files could be decrypted.");
+    }
   }
 
-  async function resolveEnvironmentKey(environmentId: string, password?: string) {
+  async function resolveEnvironmentKey(environmentId: string, password?: string, filePath?: string) {
     if (selectedEnvironmentId === environmentId && derivedKey) {
       return derivedKey;
     }
@@ -717,7 +733,17 @@ export function DashboardClient() {
       return null;
     }
 
-    const key = await deriveEnvironmentKey(candidatePassword, environment.keySalt);
+    const secretSetResponse = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
+    const preferredSecretSet =
+      secretSetResponse.secretSets.find((secretSet) => (secretSet.filePath || ".env") === (filePath || ".env")) ??
+      secretSetResponse.secretSets[0] ??
+      null;
+    const keySalt = preferredSecretSet?.keySalt || environment.keySalt;
+    if (!keySalt) {
+      throw new Error("This environment is missing its encryption salt.");
+    }
+
+    const key = await deriveEnvironmentKey(candidatePassword, keySalt);
     await verifyEnvironmentKey(environmentId, key);
     return key;
   }
@@ -814,7 +840,7 @@ export function DashboardClient() {
 
     let targetKey: string;
     try {
-      const resolved = await resolveEnvironmentKey(mapping.environmentId, password);
+      const resolved = await resolveEnvironmentKey(mapping.environmentId, password, mapping.filePath);
       if (!resolved) {
         setSyncPasswordValue("");
         setSyncPasswordPrompt({
@@ -874,13 +900,19 @@ export function DashboardClient() {
 
   // --- Unlock environment with password ---
   function handleUnlockEnv() {
-    const keySalt = selectedEnvironment?.keySalt || secretSets[0]?.keySalt;
-    if (!keySalt || !envPassword) return;
+    const keySalt = selectedSecretSet?.keySalt || secretSets[0]?.keySalt || selectedEnvironment?.keySalt;
+    if (!keySalt || !envPassword) {
+      setUnlockError("This environment is missing its encryption salt.");
+      return;
+    }
     startTransition(async () => {
       try {
+        setUnlockError(null);
         const key = await deriveEnvironmentKey(envPassword, keySalt);
+        await verifyEnvironmentKey(selectedEnvironmentId, key);
 
-        // If there's a latest revision on the selected file, try to decrypt it to verify the password
+        setDerivedKey(key);
+        setDirtyFlag(false);
         if (latestRevision) {
           try {
             const plaintext = await decryptRevisionPayload(
@@ -889,16 +921,14 @@ export function DashboardClient() {
             );
             setEnvEntries(parseEnvDocument(plaintext));
           } catch {
-            pushToast("Wrong password. Could not decrypt secrets.", "error");
-            return;
+            pushToast("Environment unlocked, but the selected file could not be decrypted. Try another file or check its latest revision.", "error");
           }
         }
-
-        setDerivedKey(key);
-        setDirtyFlag(false);
         pushToast("Environment unlocked.", "success");
-      } catch {
-        pushToast("Failed to derive key.", "error");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to derive key.";
+        setUnlockError(message);
+        pushToast(message, "error");
       }
     });
   }
@@ -2183,7 +2213,7 @@ export function DashboardClient() {
                 <input
                   type={showPassword ? "text" : "password"}
                   value={envPassword}
-                  onChange={(e) => setEnvPassword(e.target.value)}
+                  onChange={(e) => { setEnvPassword(e.target.value); if (unlockError) setUnlockError(null); }}
                   placeholder="Environment password"
                   onKeyDown={(e) => { if (e.key === "Enter" && envPassword) handleUnlockEnv(); }}
                   autoFocus
@@ -2200,6 +2230,11 @@ export function DashboardClient() {
                 {isPending ? "Decrypting..." : "Unlock"}
               </button>
             </div>
+            {unlockError && (
+              <p className="mt-3 text-sm text-[var(--error)] max-w-[420px]">
+                {unlockError}
+              </p>
+            )}
             {!latestRevision && (
               <p className="muted mt-3 text-xs">No secrets pushed yet. Unlock to start adding variables.</p>
             )}
