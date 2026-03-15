@@ -1477,12 +1477,15 @@ export function DashboardClient() {
                           <button className="button sm" disabled={isPending} onClick={() => {
                             startTransition(async () => {
                               try {
-                                await postJson(`/api/integrations/${integ.id}/sync`, { direction: "pull" });
-                                pushToast("Synced from provider.", "success");
+                                const result = await postJson<{ count: number; schemaCreated?: boolean; schemaFields?: number; newFields?: number }>(`/api/integrations/${integ.id}/sync`, { direction: "pull" });
+                                const parts = [`Pulled ${result.count} vars`];
+                                if (result.schemaCreated) parts.push(`schema: ${result.schemaFields} fields (${result.newFields} new)`);
+                                pushToast(parts.join(" — "), "success");
                                 void refreshIntegrations();
+                                void refreshSchemas();
                               } catch (err) { pushToast(err instanceof Error ? err.message : "Sync failed.", "error"); }
                             });
-                          }}>Pull</button>
+                          }}>Pull + Schema</button>
                           <button className="button sm secondary" disabled={isPending} onClick={() => {
                             startTransition(async () => {
                               try {
