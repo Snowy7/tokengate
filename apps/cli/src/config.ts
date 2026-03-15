@@ -23,7 +23,10 @@ interface StoredCliConfig {
 }
 
 function getAppUrl() {
-  return process.env.TOKENGATE_APP_URL ?? DEFAULT_APP_URL;
+  if (process.env.TOKENGATE_APP_URL) return process.env.TOKENGATE_APP_URL;
+  // Auto-detect dev mode: if running from source (not dist), use localhost
+  if (import.meta.dir?.includes("/apps/cli/src")) return "http://localhost:3000";
+  return DEFAULT_APP_URL;
 }
 
 function getDefaultConfig(): CliConfig {
@@ -39,7 +42,7 @@ export async function loadConfig(): Promise<CliConfig> {
   try {
     const value = await readFile(getConfigPath(), "utf8");
     const stored = JSON.parse(value) as StoredCliConfig;
-    const appUrl = stored.appUrl || getAppUrl();
+    const appUrl = process.env.TOKENGATE_APP_URL || stored.appUrl || DEFAULT_APP_URL;
     return {
       appUrl,
       apiUrl: appUrl,
