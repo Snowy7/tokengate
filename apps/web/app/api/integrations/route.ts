@@ -23,8 +23,13 @@ export async function POST(request: NextRequest) {
       return jsonError(400, "Missing projectId, provider, or config");
     }
 
+    const payload = {
+      ...body,
+      environmentMappings: Array.isArray(body.environmentMappings) ? body.environmentMappings : [],
+    };
+
     const { client } = await getAuthenticatedConvexClient();
-    const integrationId = await client.mutation<string>(convexFunctions.createIntegration, body);
+    const integrationId = await client.mutation<string>(convexFunctions.createIntegration, payload);
     return NextResponse.json({ integrationId });
   } catch (error) {
     return handleApiError(error);

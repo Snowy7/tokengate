@@ -2,6 +2,19 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { createAuditEvent, requireWorkspaceRole } from "./lib";
 
+async function validateMappingsBelongToProject(
+  ctx: any,
+  projectId: unknown,
+  mappings: Array<{ environmentId: unknown }>
+) {
+  for (const mapping of mappings) {
+    const environment = await ctx.db.get(mapping.environmentId);
+    if (!environment || environment.projectId !== projectId) {
+      throw new Error("Integration mapping must target an environment in the same project.");
+    }
+  }
+}
+
 export const listForProject = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
@@ -47,6 +60,7 @@ export const create = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     const { identity } = await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin"]);
+    await validateMappingsBelongToProject(ctx, args.projectId, args.environmentMappings);
 
     const integrationId = await ctx.db.insert("integrations", {
       projectId: args.projectId,
@@ -91,6 +105,10 @@ export const update = mutation({
     const project = await ctx.db.get(integration.projectId);
     if (!project) throw new Error("Project not found");
     await requireWorkspaceRole(ctx, project.workspaceId, ["owner", "admin"]);
+
+    if (args.environmentMappings !== undefined) {
+      await validateMappingsBelongToProject(ctx, integration.projectId, args.environmentMappings);
+    }
 
     const patch: Record<string, unknown> = {};
     if (args.label !== undefined) patch.label = args.label;

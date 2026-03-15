@@ -86,7 +86,10 @@ function reducer(state: SidebarState, action: Action): SidebarState {
       return {
         ...state,
         secretSets: action.secretSets,
-        selectedSecretSetId: action.autoSelect,
+        selectedSecretSetId:
+          action.secretSets.some((secretSet) => secretSet.id === state.selectedSecretSetId)
+            ? state.selectedSecretSetId
+            : action.autoSelect,
         loading: { ...state.loading, secretSets: false },
       };
 

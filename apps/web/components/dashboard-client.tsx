@@ -346,7 +346,7 @@ function RevisionDiff({ oldEntries, newEntries, oldLabel, newLabel }: {
 }
 
 type ModalKind = "workspace" | "project" | "environment" | "invite" | null;
-type ActiveView = "secrets" | "settings" | "schemas" | "integrations";
+type ActiveView = "project" | "environment" | "secrets" | "settings" | "schemas" | "integrations";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -399,6 +399,29 @@ export function DashboardClient() {
     onSubmit: (values: Record<string, string>) => void;
   } | null>(null);
   const [inputModalValues, setInputModalValues] = useState<Record<string, string>>({});
+  const [integrationMappingModal, setIntegrationMappingModal] = useState<{
+    integration: Integration;
+    mode: "attach" | "add";
+  } | null>(null);
+  const [integrationMappingValues, setIntegrationMappingValues] = useState<{
+    environmentId: string;
+    filePath: string;
+    providerTarget: string;
+  }>({ environmentId: "", filePath: ".env", providerTarget: "*" });
+  const [syncPasswordPrompt, setSyncPasswordPrompt] = useState<{
+    integration: Integration;
+    mappingIndex: number;
+    environmentId: string;
+  } | null>(null);
+  const [syncPasswordValue, setSyncPasswordValue] = useState("");
+  const [pendingEnvironmentOpen, setPendingEnvironmentOpen] = useState<{
+    environmentId: string;
+    secretSetId: string;
+    key: string;
+    password?: string;
+    entries: EnvEntry[];
+    latestRevision: SecretRevision | null;
+  } | null>(null);
 
   function showInputModal(
     title: string,
@@ -407,6 +430,15 @@ export function DashboardClient() {
   ) {
     setInputModalValues(Object.fromEntries(fields.map((f) => [f.key, ""])));
     setInputModal({ title, fields, onSubmit });
+  }
+
+  function openIntegrationMappingModal(integration: Integration, mode: "attach" | "add" = "add") {
+    setIntegrationMappingValues({
+      environmentId: selectedEnvironmentId || environments[0]?.id || "",
+      filePath: ".env",
+      providerTarget: integration.provider === "vercel" ? "production" : "*",
+    });
+    setIntegrationMappingModal({ integration, mode });
   }
 
   // --- Revision viewing ---
@@ -443,7 +475,7 @@ export function DashboardClient() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
-  const [activeView, setActiveView] = useState<ActiveView>("secrets");
+  const [activeView, setActiveView] = useState<ActiveView>("project");
 
   // --- Schemas & Integrations ---
   const [fileSchemas, setFileSchemas] = useState<FileSchema[]>([]);
@@ -591,6 +623,23 @@ export function DashboardClient() {
     setHistory([]);
   }, [selectedEnvironmentId]);
 
+  useEffect(() => {
+    if (!pendingEnvironmentOpen || selectedEnvironmentId !== pendingEnvironmentOpen.environmentId) {
+      return;
+    }
+
+    setDerivedKey(pendingEnvironmentOpen.key);
+    if (pendingEnvironmentOpen.password) {
+      setEnvPassword(pendingEnvironmentOpen.password);
+    }
+    setLatestRevision(pendingEnvironmentOpen.latestRevision);
+    setEnvEntries(pendingEnvironmentOpen.entries);
+    setDirtyFlag(false);
+    selectSecretSet(pendingEnvironmentOpen.secretSetId);
+    setActiveView("secrets");
+    setPendingEnvironmentOpen(null);
+  }, [pendingEnvironmentOpen, selectedEnvironmentId, selectSecretSet]);
+
   // --- Load revision history when secret set changes ---
   useEffect(() => {
     setEnvEntries([]);
@@ -632,6 +681,47 @@ export function DashboardClient() {
     setLatestRevision(lp.revision);
   }
 
+  async function verifyEnvironmentKey(environmentId: string, key: string) {
+    const secretSetResponse = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
+    const candidate = secretSetResponse.secretSets[0];
+    if (!candidate) return;
+
+    const latest = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${candidate.id}`);
+    if (!latest.revision) return;
+
+    await decryptRevisionPayload(
+      {
+        ciphertext: latest.revision.ciphertext,
+        wrappedDataKey: latest.revision.wrappedDataKey,
+        contentHash: latest.revision.contentHash,
+      },
+      key,
+    );
+  }
+
+  async function resolveEnvironmentKey(environmentId: string, password?: string) {
+    if (selectedEnvironmentId === environmentId && derivedKey) {
+      return derivedKey;
+    }
+
+    const environment = environments.find((env) => env.id === environmentId);
+    if (!environment) {
+      throw new Error("Mapped environment not found.");
+    }
+
+    const candidatePassword =
+      password ??
+      (selectedEnvironmentId === environmentId ? envPassword : "");
+
+    if (!candidatePassword) {
+      return null;
+    }
+
+    const key = await deriveEnvironmentKey(candidatePassword, environment.keySalt);
+    await verifyEnvironmentKey(environmentId, key);
+    return key;
+  }
+
   async function storeIntegrationPull(result: {
     count: number;
     schemaCreated?: boolean;
@@ -640,19 +730,20 @@ export function DashboardClient() {
     filePath: string;
     environmentId: string | null;
     vars: Array<{ key: string; value: string; sensitive?: boolean }>;
-  }) {
+  }, targetKey: string, passwordUsed?: string) {
     if (!result.environmentId) {
       throw new Error("Integration is missing an environment mapping.");
     }
-    if (result.environmentId !== selectedEnvironmentId) {
-      throw new Error("Select the mapped environment before syncing this integration.");
-    }
-    if (!derivedKey) {
-      throw new Error("Unlock the mapped environment before syncing this integration.");
-    }
 
     let targetSecretSetId =
-      secretSets.find((ss) => (ss.filePath || ".env") === result.filePath)?.id ?? null;
+      (result.environmentId === selectedEnvironmentId
+        ? secretSets.find((ss) => (ss.filePath || ".env") === result.filePath)?.id ?? null
+        : null);
+
+    if (!targetSecretSetId) {
+      const existing = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${result.environmentId}`);
+      targetSecretSetId = existing.secretSets.find((ss) => (ss.filePath || ".env") === result.filePath)?.id ?? null;
+    }
 
     if (!targetSecretSetId) {
       const created = await postJson<{ secretSetId: string }>("/api/secret-sets/add", {
@@ -668,7 +759,7 @@ export function DashboardClient() {
     const normalized = normalizeEnvDocument(
       stringifyEnvEntries(result.vars.map((v) => ({ key: v.key, value: v.value })))
     );
-    const encrypted = await encryptRevisionPayload(normalized, derivedKey);
+    const encrypted = await encryptRevisionPayload(normalized, targetKey);
     const revisionResult = await postJson<{
       conflict: boolean;
       acceptedRevision?: number;
@@ -685,22 +776,57 @@ export function DashboardClient() {
       throw new Error(`Conflict: remote is at revision ${revisionResult.latestRevision}. Reload and retry.`);
     }
 
-    await refreshEnvironments();
-    await refreshSecretSets();
-    selectSecretSet(targetSecretSetId);
-
     const latestStored = await fetchJson<{ revision: SecretRevision | null }>(
       `/api/revisions/latest?secretSetId=${targetSecretSetId}`
     );
-    setLatestRevision(latestStored.revision);
-    setEnvEntries(parseEnvDocument(normalized));
-    setDirtyFlag(false);
+    const parsedEntries = parseEnvDocument(normalized);
+
+    await refreshEnvironments();
+    if (result.environmentId === selectedEnvironmentId) {
+      await refreshSecretSets();
+      setDerivedKey(targetKey);
+      if (passwordUsed) {
+        setEnvPassword(passwordUsed);
+      }
+      setLatestRevision(latestStored.revision);
+      setEnvEntries(parsedEntries);
+      setDirtyFlag(false);
+    } else {
+      setPendingEnvironmentOpen({
+        environmentId: result.environmentId,
+        secretSetId: targetSecretSetId,
+        key: targetKey,
+        password: passwordUsed,
+        entries: parsedEntries,
+        latestRevision: latestStored.revision,
+      });
+      selectEnvironment(result.environmentId);
+    }
+    selectSecretSet(targetSecretSetId);
+    setActiveView("secrets");
   }
 
-  async function pullIntegrationToFile(integration: Integration, mappingIndex = 0) {
+  async function pullIntegrationToFile(integration: Integration, mappingIndex = 0, password?: string) {
     const mapping = integration.environmentMappings[mappingIndex];
     if (!mapping) {
       throw new Error("Integration has no environment mapping.");
+    }
+
+    let targetKey: string;
+    try {
+      const resolved = await resolveEnvironmentKey(mapping.environmentId, password);
+      if (!resolved) {
+        setSyncPasswordValue("");
+        setSyncPasswordPrompt({
+          integration,
+          mappingIndex,
+          environmentId: mapping.environmentId,
+        });
+        return;
+      }
+      targetKey = resolved;
+    } catch {
+      throw new Error("Wrong password for the mapped environment.");
     }
 
     const result = await postJson<{
@@ -713,7 +839,7 @@ export function DashboardClient() {
       vars: Array<{ key: string; value: string; sensitive?: boolean }>;
     }>(`/api/integrations/${integration.id}/sync`, { direction: "pull", mappingIndex });
 
-    await storeIntegrationPull(result);
+    await storeIntegrationPull(result, targetKey, password);
     await refreshIntegrations();
     await refreshSchemas();
 
@@ -945,6 +1071,7 @@ export function DashboardClient() {
         setModalName("");
         pushToast("Project created.", "success");
         selectProject(payload.projectId);
+        setActiveView("project");
       } catch (err) {
         pushToast(err instanceof Error ? err.message : "Failed.", "error");
       }
@@ -968,11 +1095,49 @@ export function DashboardClient() {
         pushToast("Environment created. Use your password to unlock it.", "success");
         await refreshEnvironments();
         selectEnvironment(payload.environmentId);
+        setActiveView("environment");
       } catch (err) {
         pushToast(err instanceof Error ? err.message : "Failed.", "error");
       }
     });
   }
+
+  function handleSaveIntegrationMapping() {
+    if (!integrationMappingModal || !integrationMappingValues.environmentId || !integrationMappingValues.filePath.trim()) return;
+
+    startTransition(async () => {
+      try {
+        const nextMappings = [
+          ...integrationMappingModal.integration.environmentMappings.filter((mapping) =>
+            !(mapping.environmentId === integrationMappingValues.environmentId && mapping.filePath === integrationMappingValues.filePath.trim())
+          ),
+          {
+            environmentId: integrationMappingValues.environmentId,
+            filePath: integrationMappingValues.filePath.trim(),
+            providerTarget: integrationMappingValues.providerTarget.trim() || (integrationMappingModal.integration.provider === "vercel" ? "production" : "*"),
+          },
+        ];
+
+        await patchJson(`/api/integrations/${integrationMappingModal.integration.id}`, {
+          environmentMappings: nextMappings,
+        });
+        setIntegrationMappingModal(null);
+        pushToast("Integration mapping saved.", "success");
+        await refreshIntegrations();
+        await refreshEnvironments();
+      } catch (err) {
+        pushToast(err instanceof Error ? err.message : "Failed.", "error");
+      }
+    });
+  }
+
+  const selectedProjectEnvironmentMeta = environmentsMeta.filter((meta) => meta.environment.projectId === selectedProjectId);
+  const selectedProjectFileCount = selectedProjectEnvironmentMeta.reduce((sum, meta) => sum + meta.fileCount, 0);
+  const selectedProjectLatestTimestamp = selectedProjectEnvironmentMeta.reduce<number | null>((latest, meta) => {
+    if (!meta.latestRevisionTimestamp) return latest;
+    return latest === null || meta.latestRevisionTimestamp > latest ? meta.latestRevisionTimestamp : latest;
+  }, null);
+  const selectedEnvironmentMeta = environmentsMeta.find((meta) => meta.environment.id === selectedEnvironmentId) ?? null;
 
   function handleModalSubmit() {
     if (modal === "workspace") handleCreateWorkspace();
@@ -1184,7 +1349,7 @@ export function DashboardClient() {
                     <button
                       key={w.workspace.id}
                       className={`sidebar-item${w.workspace.id === selectedWorkspaceId ? " active" : ""}`}
-                      onClick={() => { selectWorkspace(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("secrets"); setMobileSidebarOpen(false); }}
+                      onClick={() => { selectWorkspace(w.workspace!.id); setShowWorkspaceSwitcher(false); setActiveView("project"); setMobileSidebarOpen(false); }}
                     >
                       <IconBox size={14} />
                       <span className="flex-1 text-left">{w.workspace.name}</span>
@@ -1230,7 +1395,7 @@ export function DashboardClient() {
                     onClick={() => {
                       selectProject(proj.id);
                       toggleProjectExpanded(proj.id);
-                      setActiveView("secrets");
+                      setActiveView("project");
                     }}
                     onContextMenu={(e) => showContextMenu(e, [
                       { label: "Delete project", destructive: true, onClick: () => handleDeleteProject(proj.id, proj.name) },
@@ -1256,7 +1421,7 @@ export function DashboardClient() {
                           <div key={env.id}>
                             <button
                               className={`sidebar-item${isSelected ? " active" : ""} pl-2`}
-                              onClick={() => { selectEnvironment(env.id); setActiveView("secrets"); setMobileSidebarOpen(false); }}
+                              onClick={() => { selectEnvironment(env.id); setActiveView("environment"); setMobileSidebarOpen(false); }}
                               onContextMenu={(e) => showContextMenu(e, [
                                 { label: "Delete environment", destructive: true, onClick: () => handleDeleteEnvironment(env.id, env.name) },
                               ])}
@@ -1279,7 +1444,7 @@ export function DashboardClient() {
                                     <button
                                       key={ss.id}
                                       className={`sidebar-item${ss.id === selectedSecretSetId ? " active" : ""} text-xs py-[3px] px-2`}
-                                      onClick={() => selectSecretSet(ss.id)}
+                                      onClick={() => { selectSecretSet(ss.id); setActiveView("secrets"); }}
                                       onContextMenu={(e) => showContextMenu(e, [
                                         { label: "Delete file", destructive: true, onClick: () => handleDeleteFile(ss.id, ss.filePath || ".env") },
                                       ])}
@@ -1356,6 +1521,9 @@ export function DashboardClient() {
                 {activeView === "settings" && <><IconChevron size={12} /><span>Settings</span></>}
                 {activeView === "schemas" && <><IconChevron size={12} /><span>File Schemas</span></>}
                 {activeView === "integrations" && <><IconChevron size={12} /><span>Integrations</span></>}
+                {activeView === "project" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
+                {activeView === "environment" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
+                {activeView === "environment" && selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
                 {activeView === "secrets" && selectedProject && <><IconChevron size={12} /><span>{selectedProject.name}</span></>}
                 {activeView === "secrets" && selectedEnvironment && <><IconChevron size={12} /><span>{selectedEnvironment.name}</span></>}
                 {activeView === "secrets" && selectedSecretSet && <><IconChevron size={12} /><FileSourceIcon source={currentFileMeta?.source} size={12} /><span className="text-[13px]" style={{ fontFamily: "var(--font-mono)" }}>{selectedSecretSet.filePath || ".env"}</span></>}
@@ -1681,6 +1849,9 @@ export function DashboardClient() {
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm">{integ.label || integ.provider}</span>
                           <span className="tag text-[9px]">{integ.provider}</span>
+                          {integ.environmentMappings.length === 0 && (
+                            <span className="tag text-[9px] bg-[var(--warning)] text-black">unmapped</span>
+                          )}
                           {integ.lastSyncStatus && (
                             <span className={`tag text-[9px] ${integ.lastSyncStatus === "success" ? "encrypted" : "error"}`}>
                               {integ.lastSyncStatus}
@@ -1688,14 +1859,40 @@ export function DashboardClient() {
                           )}
                         </div>
                         {integ.lastSyncAt && <span className="muted text-[10px]">Last synced: {new Date(integ.lastSyncAt).toLocaleString()}</span>}
+                        <div className="flex flex-col gap-2 mt-3">
+                          {integ.environmentMappings.length === 0 ? (
+                            <div className="border-2 border-dashed border-[var(--border-light)] p-3 text-xs">
+                              <div className="font-bold uppercase tracking-wider mb-1" style={{ fontFamily: "var(--font-mono)" }}>Project-level integration</div>
+                              <div className="muted">This integration is not attached to any environment yet. Attach it to an environment and file to make it appear in the project tree.</div>
+                            </div>
+                          ) : (
+                            integ.environmentMappings.map((mapping, mappingIndex) => {
+                              const mappedEnvironment = environments.find((env) => env.id === mapping.environmentId);
+                              return (
+                                <div key={`${mapping.environmentId}:${mapping.filePath}`} className="flex items-center gap-2 text-xs border-2 border-[var(--border-light)] px-3 py-2">
+                                  <IconLayers size={12} />
+                                  <span className="font-bold">{mappedEnvironment?.name || "Unknown environment"}</span>
+                                  <span className="muted">→</span>
+                                  <span style={{ fontFamily: "var(--font-mono)" }}>{mapping.filePath}</span>
+                                  <span className="tag text-[8px] ml-auto">{mapping.providerTarget}</span>
+                                  <button className="button sm secondary" disabled={isPending} onClick={() => {
+                                    startTransition(async () => {
+                                      try {
+                                        await pullIntegrationToFile(integ, mappingIndex);
+                                      } catch (err) { pushToast(err instanceof Error ? err.message : "Sync failed.", "error"); }
+                                    });
+                                  }}>
+                                    Pull
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
                         <div className="flex gap-2 mt-2">
-                          <button className="button sm" disabled={isPending} onClick={() => {
-                            startTransition(async () => {
-                              try {
-                                await pullIntegrationToFile(integ);
-                              } catch (err) { pushToast(err instanceof Error ? err.message : "Sync failed.", "error"); }
-                            });
-                          }}>Pull + Schema</button>
+                          <button className="button sm" onClick={() => openIntegrationMappingModal(integ, integ.environmentMappings.length === 0 ? "attach" : "add")}>
+                            {integ.environmentMappings.length === 0 ? "Attach" : "Add mapping"}
+                          </button>
                           <button className="button sm secondary" disabled={isPending} onClick={() => {
                             startTransition(async () => {
                               try {
@@ -1753,13 +1950,9 @@ export function DashboardClient() {
                                     wrappedCredential: vals.credential,
                                     ...(provider === "convex" ? { deploymentUrl: vals.extra } : { vercelProjectId: vals.extra }),
                                   },
-                                  environmentMappings: selectedEnvironmentId ? [{
-                                    providerTarget: provider === "convex" ? "*" : "production",
-                                    environmentId: selectedEnvironmentId,
-                                    filePath: ".env",
-                                  }] : [],
+                                  environmentMappings: [],
                                 });
-                                pushToast("Integration added.", "success");
+                                pushToast("Integration added. Attach it to an environment when you’re ready.", "success");
                                 void refreshIntegrations();
                               } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
                             });
@@ -1776,8 +1969,146 @@ export function DashboardClient() {
           </div>
         )}
 
+        {activeView === "project" && selectedWorkspace && selectedProject && (
+          <div className="fade-in p-6 flex flex-col gap-6">
+            <div className="panel p-6 overflow-hidden relative">
+              <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: "radial-gradient(circle at top right, var(--accent) 0%, transparent 45%)" }} />
+              <div className="relative flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="muted text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: "var(--font-mono)" }}>Project overview</div>
+                    <h2 className="m-0 text-[30px]" style={{ fontFamily: "var(--font-heading)" }}>{selectedProject.name}</h2>
+                    <p className="muted m-0 mt-2 max-w-[640px]">A clean command center for environments, integration-backed files, schemas, and encrypted revision activity.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="button secondary" onClick={() => setActiveView("integrations")}>Integrations</button>
+                    <button className="button secondary" onClick={() => setActiveView("schemas")}>Schemas</button>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Environments</div><div className="text-2xl font-bold">{selectedProjectEnvironmentMeta.length}</div></div>
+                  <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Files</div><div className="text-2xl font-bold">{selectedProjectFileCount}</div></div>
+                  <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Integrations</div><div className="text-2xl font-bold">{projectIntegrations.length}</div></div>
+                  <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Last activity</div><div className="text-sm font-bold">{selectedProjectLatestTimestamp ? formatRelativeTime(selectedProjectLatestTimestamp) : "No revisions yet"}</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
+              <div className="panel p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="m-0 flex items-center gap-2"><IconLayers size={16} /> Environments</h3>
+                  <button className="button sm" onClick={() => { setModal("environment"); setModalName(""); setModalPassword(""); }}>New environment</button>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {selectedProjectEnvironmentMeta.map((meta) => (
+                    <button key={meta.environment.id} className="panel p-4 text-left transition-transform duration-150 hover:-translate-y-[1px]" onClick={() => { selectEnvironment(meta.environment.id); setActiveView("environment"); }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold">{meta.environment.name}</div>
+                          <div className="muted text-xs mt-1">{meta.fileCount} file{meta.fileCount !== 1 ? "s" : ""}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[11px] uppercase tracking-wider muted" style={{ fontFamily: "var(--font-mono)" }}>{meta.latestRevisionTimestamp ? formatRelativeTime(meta.latestRevisionTimestamp) : "No revisions"}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel p-5">
+                <h3 className="m-0 flex items-center gap-2 mb-4"><IconCloud size={16} /> Integration coverage</h3>
+                <div className="flex flex-col gap-3">
+                  {projectIntegrations.length === 0 && <p className="muted text-sm m-0">No integrations connected yet.</p>}
+                  {projectIntegrations.map((integration) => (
+                    <div key={integration.id} className="border-2 border-[var(--border-light)] p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileSourceIcon source={integration.provider} size={12} />
+                        <span className="font-bold text-sm">{integration.label || integration.provider}</span>
+                      </div>
+                      <div className="muted text-xs">{integration.environmentMappings.length === 0 ? "Unmapped. Attach it to an environment to surface it in the file tree." : `${integration.environmentMappings.length} mapped target${integration.environmentMappings.length !== 1 ? "s" : ""}`}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeView === "environment" && selectedWorkspace && selectedProject && selectedEnvironment && (
+          <div className="fade-in p-6 flex flex-col gap-6">
+            <div className="panel p-6 overflow-hidden relative">
+              <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: "linear-gradient(120deg, transparent 0%, var(--surface-hover) 30%, transparent 80%)" }} />
+              <div className="relative flex items-start justify-between gap-4">
+                <div>
+                  <div className="muted text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: "var(--font-mono)" }}>Environment overview</div>
+                  <h2 className="m-0 text-[30px]" style={{ fontFamily: "var(--font-heading)" }}>{selectedEnvironment.name}</h2>
+                  <p className="muted m-0 mt-2 max-w-[640px]">Encrypted files, integration bindings, and revision activity for this environment.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button className="button secondary" onClick={() => setActiveView("secrets")} disabled={isEnvUnlocked && !selectedSecretSetId}>Unlock</button>
+                  <button className="button" onClick={() => setActiveView("secrets")} disabled={!selectedSecretSetId}>Open files</button>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4 mt-5">
+                <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Files</div><div className="text-2xl font-bold">{selectedEnvironmentMeta?.fileCount ?? 0}</div></div>
+                <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Schemas</div><div className="text-2xl font-bold">{selectedEnvironmentMeta?.files.filter((file) => file.hasSchema).length ?? 0}</div></div>
+                <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Provider files</div><div className="text-2xl font-bold">{selectedEnvironmentMeta?.files.filter((file) => file.source && file.source !== "tokengate").length ?? 0}</div></div>
+                <div className="panel p-4"><div className="muted text-[10px] uppercase tracking-wider">Last activity</div><div className="text-sm font-bold">{selectedEnvironmentMeta?.latestRevisionTimestamp ? formatRelativeTime(selectedEnvironmentMeta.latestRevisionTimestamp) : "No revisions yet"}</div></div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+              <div className="panel p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="m-0 flex items-center gap-2"><IconFile size={16} /> Files</h3>
+                  <button className="button sm secondary" onClick={() => setActiveView("secrets")} disabled={!selectedSecretSetId}>Open editor</button>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {(selectedEnvironmentMeta?.files ?? []).map((file) => (
+                    <button key={file.secretSetId} className="panel p-4 text-left" onClick={() => { selectSecretSet(file.secretSetId); setActiveView("secrets"); }}>
+                      <div className="flex items-center gap-2">
+                        <FileSourceIcon source={file.source} size={12} />
+                        <span style={{ fontFamily: "var(--font-mono)" }}>{file.filePath || ".env"}</span>
+                        {file.hasSchema && <span className="tag text-[8px] ml-auto">schema</span>}
+                      </div>
+                    </button>
+                  ))}
+                  {(selectedEnvironmentMeta?.files.length ?? 0) === 0 && (
+                    <p className="muted text-sm m-0">No files yet. Pull an attached integration or create the first file from the editor flow.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="panel p-5">
+                <h3 className="m-0 flex items-center gap-2 mb-4"><IconLayers size={16} /> Attached integrations</h3>
+                <div className="flex flex-col gap-3">
+                  {projectIntegrations.filter((integration) => integration.environmentMappings.some((mapping) => mapping.environmentId === selectedEnvironmentId)).map((integration) => (
+                    <div key={integration.id} className="border-2 border-[var(--border-light)] p-3">
+                      <div className="flex items-center gap-2">
+                        <FileSourceIcon source={integration.provider} size={12} />
+                        <span className="font-bold text-sm">{integration.label || integration.provider}</span>
+                      </div>
+                      <div className="muted text-xs mt-2">
+                        {integration.environmentMappings
+                          .filter((mapping) => mapping.environmentId === selectedEnvironmentId)
+                          .map((mapping) => mapping.filePath)
+                          .join(", ")}
+                      </div>
+                    </div>
+                  ))}
+                  {projectIntegrations.every((integration) => !integration.environmentMappings.some((mapping) => mapping.environmentId === selectedEnvironmentId)) && (
+                    <p className="muted text-sm m-0">No integrations are attached to this environment yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Initial loading — workspaces haven't loaded yet */}
-        {activeView === "secrets" && loadingWorkspaces && (
+        {(activeView === "project" || activeView === "environment" || activeView === "secrets") && loadingWorkspaces && (
           <div className="empty-state fade-in">
             <div className="loading-spinner" />
             <p className="muted mt-4">Loading your workspaces...</p>
@@ -2272,6 +2603,114 @@ export function DashboardClient() {
                     {isPending ? "Sending..." : "Send invite"}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {integrationMappingModal && (
+        <div className="modal-overlay" onClick={() => setIntegrationMappingModal(null)}>
+          <div className="modal panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <strong>{integrationMappingModal.mode === "attach" ? "Attach integration" : "Add integration mapping"}</strong>
+              <button className="icon-button" onClick={() => setIntegrationMappingModal(null)}><IconX size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="field">
+                <span>Environment</span>
+                <select
+                  className="select"
+                  value={integrationMappingValues.environmentId}
+                  onChange={(e) => setIntegrationMappingValues((prev) => ({ ...prev, environmentId: e.target.value }))}
+                >
+                  <option value="" disabled>Select environment</option>
+                  {environments.map((environment) => (
+                    <option key={environment.id} value={environment.id}>{environment.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <span>File path</span>
+                <input
+                  value={integrationMappingValues.filePath}
+                  onChange={(e) => setIntegrationMappingValues((prev) => ({ ...prev, filePath: e.target.value }))}
+                  placeholder=".env"
+                />
+              </div>
+              <div className="field">
+                <span>{integrationMappingModal.integration.provider === "vercel" ? "Target" : "Provider target"}</span>
+                <input
+                  value={integrationMappingValues.providerTarget}
+                  onChange={(e) => setIntegrationMappingValues((prev) => ({ ...prev, providerTarget: e.target.value }))}
+                  placeholder={integrationMappingModal.integration.provider === "vercel" ? "production" : "*"}
+                />
+                <span className="muted text-xs">
+                  {integrationMappingModal.integration.provider === "vercel" ? "Use production, preview, or development." : "Use * for the default Convex environment variable set."}
+                </span>
+              </div>
+              <div className="flex gap-2 justify-end mt-2">
+                <button className="button secondary" onClick={() => setIntegrationMappingModal(null)}>Cancel</button>
+                <button className="button" onClick={handleSaveIntegrationMapping} disabled={!integrationMappingValues.environmentId || !integrationMappingValues.filePath.trim() || isPending}>
+                  {isPending ? "Saving..." : "Save mapping"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {syncPasswordPrompt && (
+        <div className="modal-overlay" onClick={() => setSyncPasswordPrompt(null)}>
+          <div className="modal panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <strong>Unlock mapped environment</strong>
+              <button className="icon-button" onClick={() => setSyncPasswordPrompt(null)}><IconX size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p className="muted text-sm mt-0 mb-4">
+                Enter the environment password to import provider variables into the mapped encrypted file.
+              </p>
+              <div className="field">
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={syncPasswordValue}
+                  onChange={(e) => setSyncPasswordValue(e.target.value)}
+                  placeholder="Environment password"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && syncPasswordValue.trim()) {
+                      const prompt = syncPasswordPrompt;
+                      startTransition(async () => {
+                        try {
+                          await pullIntegrationToFile(prompt.integration, prompt.mappingIndex, syncPasswordValue.trim());
+                          setSyncPasswordPrompt(null);
+                          setSyncPasswordValue("");
+                        } catch (err) {
+                          pushToast(err instanceof Error ? err.message : "Sync failed.", "error");
+                        }
+                      });
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2 justify-end mt-2">
+                <button className="button secondary" onClick={() => setSyncPasswordPrompt(null)}>Cancel</button>
+                <button className="button" disabled={!syncPasswordValue.trim() || isPending} onClick={() => {
+                  const prompt = syncPasswordPrompt;
+                  startTransition(async () => {
+                    try {
+                      await pullIntegrationToFile(prompt.integration, prompt.mappingIndex, syncPasswordValue.trim());
+                      setSyncPasswordPrompt(null);
+                      setSyncPasswordValue("");
+                    } catch (err) {
+                      pushToast(err instanceof Error ? err.message : "Sync failed.", "error");
+                    }
+                  });
+                }}>
+                  {isPending ? "Unlocking..." : "Unlock and sync"}
+                </button>
               </div>
             </div>
           </div>

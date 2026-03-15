@@ -15,9 +15,9 @@ export class ConvexAdapter implements ProviderAdapter {
       throw new Error(`Convex API error (${response.status}): ${text}`);
     }
 
-    const data = await response.json() as Record<string, string>;
+    const raw = await response.json() as unknown;
+    const data = this.unwrapEnvironmentVariables(raw);
 
-    // Convex returns { NAME: "value", ... }
     return Object.entries(data).map(([key, value]) => ({
       key,
       value: String(value),
@@ -68,5 +68,29 @@ export class ConvexAdapter implements ProviderAdapter {
     return {
       authorization: `Convex ${config.credential}`,
     };
+  }
+
+  private unwrapEnvironmentVariables(payload: unknown): Record<string, string> {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return {};
+    }
+
+    const record = payload as Record<string, unknown>;
+    const candidate =
+      this.asStringRecord(record.environment_variables) ??
+      this.asStringRecord(record.environmentVariables) ??
+      this.asStringRecord(record);
+
+    return candidate ?? {};
+  }
+
+  private asStringRecord(value: unknown): Record<string, string> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, String(entry ?? "")])
+    );
   }
 }
