@@ -1681,13 +1681,16 @@ async function createEnvironmentWithPassword(
   const es = p.spinner();
   es.start("Creating environment");
   const salt = generateSalt();
+  const derivedKey = await deriveEnvironmentKey(password as string, salt);
+  const passwordVerifier = await hashContent(`tokengate-env-verifier:${derivedKey}`);
   const environmentId = await client.mutation<string>(
     convexFunctions.createEnvironment,
     {
       projectId,
       name: name as string,
       slug: toSlug(name as string),
-      keySalt: salt
+      keySalt: salt,
+      passwordVerifier
     }
   );
   es.stop("Environment created.");
@@ -1698,6 +1701,7 @@ async function createEnvironmentWithPassword(
     name: name as string,
     slug: toSlug(name as string),
     keySalt: salt,
+    passwordVerifier,
     createdAt: Date.now()
   };
 }

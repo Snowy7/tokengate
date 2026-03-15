@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       name?: string;
       slug?: string;
       keySalt?: string;
+      passwordVerifier?: string;
       filePath?: string;
     };
 
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       name: body.name,
       slug: body.slug,
       keySalt: body.keySalt,
+      passwordVerifier: body.passwordVerifier,
       filePath: body.filePath
     });
     return NextResponse.json({ environmentId });

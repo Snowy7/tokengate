@@ -39,6 +39,7 @@ export interface Environment {
   name: string;
   slug: string;
   keySalt: string;
+  passwordVerifier?: string;
   createdAt: number;
 }
 
@@ -122,6 +123,7 @@ export interface CreateEnvironmentInput {
   name: string;
   slug: string;
   keySalt: string;
+  passwordVerifier?: string;
 }
 
 export interface CreateRevisionInput {

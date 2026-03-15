@@ -40,6 +40,7 @@ export default defineSchema({
     name: v.string(),
     slug: v.string(),
     keySalt: v.string(),
+    passwordVerifier: v.optional(v.string()),
     createdAt: v.number()
   }).index("by_project", ["projectId"]),
 

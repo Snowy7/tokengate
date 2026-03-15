@@ -5,6 +5,7 @@ import { UserButton } from "@clerk/nextjs";
 import {
   deriveEnvironmentKey,
   generateSalt,
+  hashContent,
   decryptRevisionPayload,
   encryptRevisionPayload,
   generateDeviceKeyPair,
@@ -690,6 +691,19 @@ export function DashboardClient() {
   }
 
   async function verifyEnvironmentKey(environmentId: string, key: string) {
+    const environment = environments.find((item) => item.id === environmentId);
+    if (!environment) {
+      throw new Error("Environment not found.");
+    }
+
+    if (environment.passwordVerifier) {
+      const verifier = await hashContent(`tokengate-env-verifier:${key}`);
+      if (verifier !== environment.passwordVerifier) {
+        throw new Error("Wrong password.");
+      }
+      return;
+    }
+
     const environmentMeta = environmentsMeta.find((meta) => meta.environment.id === environmentId) ?? null;
     const environmentSecretSets = await resolveEnvironmentSecretSets({
       environmentId,
@@ -1119,6 +1133,7 @@ export function DashboardClient() {
         });
         setModal(null);
         setModalName("");
+        await refreshWorkspaces();
         pushToast("Project created.", "success");
         selectProject(payload.projectId);
         setActiveView("project");
@@ -1133,11 +1148,14 @@ export function DashboardClient() {
     startTransition(async () => {
       try {
         const keySalt = generateSalt();
+        const environmentKey = await deriveEnvironmentKey(modalPassword, keySalt);
+        const passwordVerifier = await hashContent(`tokengate-env-verifier:${environmentKey}`);
         const payload = await postJson<{ environmentId: string }>("/api/environments", {
           projectId: selectedProjectId,
           name: modalName.trim(),
           slug: toSlug(modalName),
           keySalt,
+          passwordVerifier,
         });
         setModal(null);
         setModalName("");
@@ -1786,7 +1804,8 @@ export function DashboardClient() {
                             });
                             pushToast("Schema saved.", "success");
                             setSchemaEditing(null);
-                            void refreshSchemas();
+                            await Promise.all([refreshSchemas(), refreshEnvironments()]);
+                            await refreshSecretSets();
                           } catch (err) {
                             pushToast(err instanceof Error ? err.message : "Failed.", "error");
                           }
@@ -2419,7 +2438,8 @@ export function DashboardClient() {
                                         fields: [...currentFileSchema.fields, { name: entry.key, type: "string", required: false, sensitive: false }],
                                       });
                                       pushToast(`Added "${entry.key}" to schema.`, "success");
-                                      void refreshSchemas();
+                                      await Promise.all([refreshSchemas(), refreshEnvironments()]);
+                                      await refreshSecretSets();
                                     } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
                                   });
                                 }}
@@ -2458,7 +2478,8 @@ export function DashboardClient() {
                                     fields,
                                   });
                                   pushToast(`Schema created with ${fields.length} field${fields.length !== 1 ? "s" : ""}.`, "success");
-                                  void refreshSchemas();
+                                  await Promise.all([refreshSchemas(), refreshEnvironments()]);
+                                  await refreshSecretSets();
                                 } catch (err) { pushToast(err instanceof Error ? err.message : "Failed.", "error"); }
                               });
                             }}>

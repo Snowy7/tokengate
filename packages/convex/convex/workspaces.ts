@@ -108,6 +108,7 @@ export const createEnvironment = mutation({
     name: v.string(),
     slug: v.string(),
     keySalt: v.string(),
+    passwordVerifier: v.optional(v.string()),
     filePath: v.optional(v.string())
   },
   handler: async (ctx, args) => {
@@ -122,6 +123,7 @@ export const createEnvironment = mutation({
       name: args.name,
       slug: args.slug,
       keySalt: args.keySalt,
+      passwordVerifier: args.passwordVerifier,
       createdAt: Date.now()
     });
 

@@ -72,6 +72,31 @@ export const upsert = mutation({
       )
       .unique();
 
+    const environments = await ctx.db
+      .query("environments")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const environment of environments) {
+      const secretSets = await ctx.db
+        .query("secretSets")
+        .withIndex("by_environment", (q) => q.eq("environmentId", environment._id))
+        .collect();
+
+      const hasMatchingSecretSet = secretSets.some(
+        (secretSet) => (secretSet.filePath ?? ".env") === args.filePath,
+      );
+
+      if (!hasMatchingSecretSet) {
+        await ctx.db.insert("secretSets", {
+          environmentId: environment._id,
+          filePath: args.filePath,
+          keySalt: secretSets[0]?.keySalt ?? environment.keySalt,
+          createdAt: now,
+        });
+      }
+    }
+
     if (existing) {
       await ctx.db.patch(existing._id, {
         fields: args.fields,
