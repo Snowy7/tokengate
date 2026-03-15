@@ -24,10 +24,10 @@ jobs:
         run: bun test packages
 
       - name: Typecheck Convex
-        run: cd packages/convex && npx tsc --noEmit
+        run: bunx tsc --noEmit -p packages/convex/tsconfig.json
 
       - name: Typecheck CLI
-        run: cd apps/cli && npx tsc --noEmit
+        run: bunx tsc --noEmit -p apps/cli/tsconfig.json
 
       - name: Build CLI
         run: cd apps/cli && bun run build
