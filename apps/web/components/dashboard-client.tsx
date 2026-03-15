@@ -26,6 +26,7 @@ import type {
   SecretSet,
 } from "@tokengate/sdk";
 import { useSidebarData } from "./use-sidebar-data";
+import { pickPreferredSecretSet, resolveEnvironmentSecretSets } from "@/lib/environment-access";
 
 // ---------------------------------------------------------------------------
 // Icons
@@ -683,12 +684,24 @@ export function DashboardClient() {
     setLatestRevision(lp.revision);
   }
 
+  async function fetchEnvironmentSecretSets(environmentId: string) {
+    const response = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
+    return response.secretSets;
+  }
+
   async function verifyEnvironmentKey(environmentId: string, key: string) {
-    const secretSetResponse = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
-    if (secretSetResponse.secretSets.length === 0) return;
+    const environmentMeta = environmentsMeta.find((meta) => meta.environment.id === environmentId) ?? null;
+    const environmentSecretSets = await resolveEnvironmentSecretSets({
+      environmentId,
+      selectedEnvironmentId,
+      selectedSecretSets: environmentId === selectedEnvironmentId ? secretSets : [],
+      environmentMeta,
+      fetchSecretSets: fetchEnvironmentSecretSets,
+    });
+    if (environmentSecretSets.length === 0) return;
 
     let hasProtectedRevision = false;
-    for (const secretSet of secretSetResponse.secretSets) {
+    for (const secretSet of environmentSecretSets) {
       const latest = await fetchJson<{ revision: SecretRevision | null }>(`/api/revisions/latest?secretSetId=${secretSet.id}`);
       if (!latest.revision) {
         continue;
@@ -733,11 +746,15 @@ export function DashboardClient() {
       return null;
     }
 
-    const secretSetResponse = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${environmentId}`);
-    const preferredSecretSet =
-      secretSetResponse.secretSets.find((secretSet) => (secretSet.filePath || ".env") === (filePath || ".env")) ??
-      secretSetResponse.secretSets[0] ??
-      null;
+    const environmentMeta = environmentsMeta.find((meta) => meta.environment.id === environmentId) ?? null;
+    const environmentSecretSets = await resolveEnvironmentSecretSets({
+      environmentId,
+      selectedEnvironmentId,
+      selectedSecretSets: environmentId === selectedEnvironmentId ? secretSets : [],
+      environmentMeta,
+      fetchSecretSets: fetchEnvironmentSecretSets,
+    });
+    const preferredSecretSet = pickPreferredSecretSet(environmentSecretSets, filePath);
     const keySalt = preferredSecretSet?.keySalt || environment.keySalt;
     if (!keySalt) {
       throw new Error("This environment is missing its encryption salt.");
@@ -767,8 +784,15 @@ export function DashboardClient() {
         : null);
 
     if (!targetSecretSetId) {
-      const existing = await fetchJson<{ secretSets: SecretSet[] }>(`/api/secret-sets/list?environmentId=${result.environmentId}`);
-      targetSecretSetId = existing.secretSets.find((ss) => (ss.filePath || ".env") === result.filePath)?.id ?? null;
+      const environmentMeta = environmentsMeta.find((meta) => meta.environment.id === result.environmentId) ?? null;
+      const existingSecretSets = await resolveEnvironmentSecretSets({
+        environmentId: result.environmentId,
+        selectedEnvironmentId,
+        selectedSecretSets: result.environmentId === selectedEnvironmentId ? secretSets : [],
+        environmentMeta,
+        fetchSecretSets: fetchEnvironmentSecretSets,
+      });
+      targetSecretSetId = pickPreferredSecretSet(existingSecretSets, result.filePath)?.id ?? null;
     }
 
     if (!targetSecretSetId) {
@@ -839,21 +863,17 @@ export function DashboardClient() {
     }
 
     let targetKey: string;
-    try {
-      const resolved = await resolveEnvironmentKey(mapping.environmentId, password, mapping.filePath);
-      if (!resolved) {
-        setSyncPasswordValue("");
-        setSyncPasswordPrompt({
-          integration,
-          mappingIndex,
-          environmentId: mapping.environmentId,
-        });
-        return;
-      }
-      targetKey = resolved;
-    } catch {
-      throw new Error("Wrong password for the mapped environment.");
+    const resolved = await resolveEnvironmentKey(mapping.environmentId, password, mapping.filePath);
+    if (!resolved) {
+      setSyncPasswordValue("");
+      setSyncPasswordPrompt({
+        integration,
+        mappingIndex,
+        environmentId: mapping.environmentId,
+      });
+      return;
     }
+    targetKey = resolved;
 
     const result = await postJson<{
       count: number;

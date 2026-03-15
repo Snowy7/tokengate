@@ -1697,6 +1697,7 @@ async function createEnvironmentWithPassword(
     projectId,
     name: name as string,
     slug: toSlug(name as string),
+    keySalt: salt,
     createdAt: Date.now()
   };
 }
