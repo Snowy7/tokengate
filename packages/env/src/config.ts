@@ -81,7 +81,7 @@ export type ResolvedConfig<S extends EnvSchema = EnvSchema> = Required<Tokengate
 export function resolveConfig<S extends EnvSchema>(config: TokengateConfig<S>): ResolvedConfig<S> {
   return {
     project: config.project ?? "",
-    environment: config.environment ?? process.env.NODE_ENV ?? "development",
+    environment: process.env.TOKENGATE_ENV ?? config.environment ?? process.env.NODE_ENV ?? "development",
     file: config.file ?? ".env",
     apiUrl: config.apiUrl ?? process.env.TOKENGATE_API_URL ?? "https://tokengate.dev",
     schema: config.schema,

@@ -33,16 +33,20 @@ interface CloudPayload {
   keySalt: string;
 }
 
+interface EnvFileMapping {
+  secretSetId: string;
+  environmentId: string;
+  environmentName: string;
+}
+
 interface LocalProjectConfig {
   workspaceId: string;
   projectId: string;
   environmentId?: string;
   environmentName?: string;
-  mappings: Record<string, {
-    secretSetId: string;
-    environmentId: string;
-    environmentName: string;
-  }>;
+  mappings: Record<string, EnvFileMapping>;
+  /** Multi-environment mappings: envName → { filePath → mapping } */
+  environments?: Record<string, Record<string, EnvFileMapping>>;
 }
 
 interface CliConfig {
@@ -230,8 +234,34 @@ async function loadFromCloud<S extends EnvSchema>(config: ResolvedConfig<S>): Pr
   const cliConfig = readCliConfig();
   if (!cliConfig?.accessToken || !cliConfig?.convexUrl) return null;
 
-  // Find the mapping for the requested file
-  const mapping = localConfig.mappings[config.file];
+  // Resolve environment: TOKENGATE_ENV > config.environment > .tokengate.json > NODE_ENV > "development"
+  const targetEnv = process.env.TOKENGATE_ENV
+    ?? config.environment
+    ?? localConfig.environmentName
+    ?? process.env.NODE_ENV
+    ?? "development";
+
+  // Find the mapping for the requested file + environment
+  // 1. Try multi-env mappings first (environments.production[".env"])
+  // 2. Fall back to flat mappings if env name matches or no multi-env
+  let mapping: EnvFileMapping | undefined;
+
+  if (localConfig.environments?.[targetEnv]) {
+    mapping = localConfig.environments[targetEnv][config.file];
+  }
+
+  if (!mapping) {
+    // Fall back to flat mappings if the target env matches the stored env
+    const flatMapping = localConfig.mappings[config.file];
+    if (flatMapping && (!targetEnv || flatMapping.environmentName === targetEnv || targetEnv === localConfig.environmentName)) {
+      mapping = flatMapping;
+    } else if (flatMapping) {
+      // Env mismatch — flat mappings are for a different env
+      // Still use them as last resort (backward compat)
+      mapping = flatMapping;
+    }
+  }
+
   if (!mapping) return null;
 
   // Fetch the latest revision from Convex

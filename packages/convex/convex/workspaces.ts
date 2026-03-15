@@ -107,7 +107,7 @@ export const createEnvironment = mutation({
     projectId: v.id("projects"),
     name: v.string(),
     slug: v.string(),
-    keySalt: v.string(),
+    keySalt: v.optional(v.string()),
     filePath: v.optional(v.string())
   },
   handler: async (ctx, args) => {
@@ -124,12 +124,8 @@ export const createEnvironment = mutation({
       createdAt: Date.now()
     });
 
-    await ctx.db.insert("secretSets", {
-      environmentId,
-      filePath: args.filePath,
-      keySalt: args.keySalt,
-      createdAt: Date.now()
-    });
+    // Store keySalt on the environment level for later use when adding files
+    // Do NOT auto-create a secretSet — files are added explicitly via addSecretSet
 
     await createAuditEvent(ctx, {
       workspaceId: project.workspaceId,
