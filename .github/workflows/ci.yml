@@ -28,9 +28,9 @@ jobs:
 
       - name: Build CLI workspace dependencies
         run: |
-          bun --cwd packages/crypto run build
-          bun --cwd packages/env-format run build
-          bun --cwd packages/env run build
+          cd packages/crypto && bun run build
+          cd ../env-format && bun run build
+          cd ../env && bun run build
 
       - name: Typecheck CLI
         run: bunx tsc --noEmit -p apps/cli/tsconfig.json
